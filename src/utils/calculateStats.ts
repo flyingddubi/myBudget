@@ -8,10 +8,14 @@ function isSameMonth(dateString: string, referenceDate: Date) {
   );
 }
 
-export function calculateStats(transactions: Transaction[], budget: number) {
-  const now = new Date();
+export function calculateStats(
+  transactions: Transaction[],
+  budget: number,
+  /** 집계 기준 월 (기본: 오늘 날짜가 속한 달) */
+  referenceMonth: Date = new Date(),
+) {
   const currentMonthTransactions = transactions.filter((transaction) =>
-    isSameMonth(transaction.date, now),
+    isSameMonth(transaction.date, referenceMonth),
   );
 
   const monthlyIncomeTotal = currentMonthTransactions

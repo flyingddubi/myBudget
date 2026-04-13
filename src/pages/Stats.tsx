@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   Bar,
   BarChart,
@@ -16,6 +16,7 @@ import {
 import { useAppContext } from "../context/AppContext";
 import { calculateStats } from "../utils/calculateStats";
 import { formatCurrency } from "../utils/formatCurrency";
+import { isYmdInMonth } from "../utils/aggregateByDate";
 import { buildLast12MonthsFlow } from "../utils/yearlyFlow";
 import type { Transaction } from "../types";
 
@@ -135,18 +136,144 @@ function YearlyFlowView({
   );
 }
 
+function startOfMonth(d: Date): Date {
+  return new Date(d.getFullYear(), d.getMonth(), 1);
+}
+
+function CategoryExpenseDetailView({
+  categoryName,
+  viewMonth,
+  transactions,
+  onBack,
+}: {
+  categoryName: string;
+  viewMonth: Date;
+  transactions: Transaction[];
+  onBack: () => void;
+}) {
+  const rows = useMemo(() => {
+    return transactions
+      .filter(
+        (transaction) =>
+          transaction.type === "expense" &&
+          transaction.category === categoryName &&
+          isYmdInMonth(transaction.date, viewMonth),
+      )
+      .sort((a, b) => b.date.localeCompare(a.date));
+  }, [transactions, categoryName, viewMonth]);
+
+  const monthLabel = viewMonth.toLocaleDateString("ko-KR", {
+    year: "numeric",
+    month: "long",
+  });
+
+  const total = rows.reduce((sum, row) => sum + row.amount, 0);
+
+  return (
+    <div className="space-y-5">
+      <button
+        type="button"
+        onClick={onBack}
+        className="flex min-h-[44px] items-center gap-1 rounded-2xl bg-white px-3 py-2 text-sm font-semibold text-slate-600 shadow-[0_8px_24px_rgba(15,23,42,0.08)] active:scale-[0.99]"
+      >
+        <span className="text-lg leading-none">‹</span>
+        뒤로
+      </button>
+
+      <section className="rounded-[28px] bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.08)]">
+        <p className="text-sm font-semibold text-slate-500">{monthLabel}</p>
+        <h2 className="mt-1 text-xl font-bold text-slate-900">
+          「{categoryName}」 지출 내역
+        </h2>
+        <p className="mt-3 text-sm text-slate-500">
+          합계{" "}
+          <span className="font-bold text-rose-600">{formatCurrency(total)}</span> ·{" "}
+          {rows.length}건
+        </p>
+      </section>
+
+      {rows.length === 0 ? (
+        <p className="rounded-[24px] bg-slate-50 px-4 py-10 text-center text-sm text-slate-400">
+          이 달 이 카테고리 지출이 없어요.
+        </p>
+      ) : (
+        <div className="space-y-3">
+          {rows.map((transaction) => (
+            <div
+              key={transaction.id}
+              className="rounded-[22px] border border-slate-100 bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.06)]"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-base font-semibold text-slate-900">
+                    {transaction.memo?.trim() || "메모 없음"}
+                  </p>
+                  <p className="mt-1 text-sm text-slate-400">
+                    {new Date(transaction.date).toLocaleDateString("ko-KR", {
+                      year: "numeric",
+                      month: "long",
+                      day: "numeric",
+                      weekday: "short",
+                    })}
+                  </p>
+                </div>
+                <p className="shrink-0 text-lg font-bold text-rose-600">
+                  {formatCurrency(transaction.amount)}
+                </p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function Stats() {
   const [statsView, setStatsView] = useState<"main" | "yearly">("main");
+  const [detailCategory, setDetailCategory] = useState<string | null>(null);
+  const [viewMonth, setViewMonth] = useState(() => startOfMonth(new Date()));
   const {
     state: { transactions, budget },
   } = useAppContext();
+
+  const isViewingCurrentMonth = useMemo(() => {
+    const n = new Date();
+    return (
+      viewMonth.getFullYear() === n.getFullYear() &&
+      viewMonth.getMonth() === n.getMonth()
+    );
+  }, [viewMonth]);
+
   const {
     monthlyExpenseTotal,
     monthlyIncomeTotal,
     categoryBreakdown,
     budgetProgress,
     budgetRemaining,
-  } = calculateStats(transactions, budget);
+  } = useMemo(
+    () => calculateStats(transactions, budget, viewMonth),
+    [transactions, budget, viewMonth],
+  );
+
+  const expenseHeading = isViewingCurrentMonth
+    ? "이번 달 지출"
+    : `${viewMonth.toLocaleDateString("ko-KR", {
+        year: "numeric",
+        month: "long",
+      })} 지출`;
+
+  const goPrevMonth = useCallback(() => {
+    setViewMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
+  }, []);
+
+  const goNextMonth = useCallback(() => {
+    setViewMonth((prev) => {
+      const next = new Date(prev.getFullYear(), prev.getMonth() + 1, 1);
+      const cap = startOfMonth(new Date());
+      return next > cap ? prev : next;
+    });
+  }, []);
 
   const normalizedProgress = Math.min(Math.max(budgetProgress, 0), 100);
   const budgetExceeded = budget > 0 && monthlyExpenseTotal > budget;
@@ -165,13 +292,48 @@ export function Stats() {
     );
   }
 
+  if (detailCategory !== null) {
+    return (
+      <CategoryExpenseDetailView
+        categoryName={detailCategory}
+        viewMonth={viewMonth}
+        transactions={transactions}
+        onBack={() => setDetailCategory(null)}
+      />
+    );
+  }
+
   return (
     <div className="space-y-5">
       <section className="rounded-[32px] bg-gradient-to-br from-slate-900 via-slate-800 to-slate-700 p-5 text-white shadow-[0_18px_40px_rgba(15,23,42,0.22)]">
-        <p className="text-sm text-white/70">이번 달 지출</p>
-        <h2 className="mt-2 text-3xl font-bold">
-          {formatCurrency(monthlyExpenseTotal)}
-        </h2>
+        <div className="flex items-start gap-2">
+          <button
+            type="button"
+            onClick={goPrevMonth}
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/10 text-xl font-semibold text-white transition hover:bg-white/20 active:scale-95"
+            aria-label="이전 달 지출"
+          >
+            ‹
+          </button>
+          <div className="min-w-0 flex-1 text-center">
+            <p className="text-sm text-white/70">{expenseHeading}</p>
+            <h2 className="mt-2 text-3xl font-bold">
+              {formatCurrency(monthlyExpenseTotal)}
+            </h2>
+          </div>
+          <div className="flex h-11 w-11 shrink-0 justify-end">
+            {!isViewingCurrentMonth ? (
+              <button
+                type="button"
+                onClick={goNextMonth}
+                className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/10 text-xl font-semibold text-white transition hover:bg-white/20 active:scale-95"
+                aria-label="다음 달 지출"
+              >
+                ›
+              </button>
+            ) : null}
+          </div>
+        </div>
         <div className="mt-5 grid grid-cols-2 gap-3">
           <div className="rounded-[24px] bg-white/10 p-4 backdrop-blur">
             <p className="text-xs text-white/70">수입</p>
@@ -226,13 +388,14 @@ export function Stats() {
         <div className="mb-4">
           <h3 className="text-base font-bold text-slate-900">카테고리별 소비</h3>
           <p className="mt-1 text-sm text-slate-400">
-            이번 달 지출을 카테고리 기준으로 나눠봤어요.
+            선택한 달의 지출을 카테고리 기준으로 나눴도록 했어요. 항목을 누르면
+            상세 내역을 볼 수 있어요.
           </p>
         </div>
 
         {categoryBreakdown.length === 0 ? (
           <p className="rounded-[20px] bg-slate-50 px-4 py-10 text-center text-sm text-slate-400">
-            아직 이번 달 지출 데이터가 없어요.
+            아직 이 달 지출 데이터가 없어요.
           </p>
         ) : (
           <>
@@ -261,13 +424,15 @@ export function Stats() {
 
             <div className="mt-4 space-y-3">
               {categoryBreakdown.map((item, index) => (
-                <div
+                <button
                   key={item.name}
-                  className="flex items-center justify-between rounded-[20px] bg-slate-50 px-4 py-3"
+                  type="button"
+                  onClick={() => setDetailCategory(item.name)}
+                  className="flex w-full items-center justify-between rounded-[20px] bg-slate-50 px-4 py-3 text-left transition hover:bg-slate-100 active:scale-[0.99]"
                 >
-                  <div className="flex items-center gap-3">
+                  <div className="flex min-w-0 items-center gap-3">
                     <span
-                      className="h-3 w-3 rounded-full"
+                      className="h-3 w-3 shrink-0 rounded-full"
                       style={{
                         backgroundColor:
                           CHART_COLORS[index % CHART_COLORS.length],
@@ -277,7 +442,7 @@ export function Stats() {
                       {item.name}
                     </span>
                   </div>
-                  <div className="text-right">
+                  <div className="shrink-0 text-right">
                     <p className="text-sm font-semibold text-slate-900">
                       {formatCurrency(item.value)}
                     </p>
@@ -285,7 +450,7 @@ export function Stats() {
                       {Math.round(item.percentage)}%
                     </p>
                   </div>
-                </div>
+                </button>
               ))}
             </div>
           </>

@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import type { Transaction, TransactionType } from "../types";
+import type { RecurringTemplate, Transaction, TransactionType } from "../types";
 
 type AddTransactionModalProps = {
   open: boolean;
   categories: string[];
   initialTransaction: Transaction | null;
+  /** 신규 추가 시 설정한 반복 프리셋으로 폼을 채움 (날짜는 오늘) */
+  prefillTemplate: RecurringTemplate | null;
   onClose: () => void;
   onSubmit: (transaction: Transaction) => void;
 };
@@ -20,6 +22,7 @@ type FormState = {
 function createInitialState(
   categories: string[],
   transaction: Transaction | null,
+  prefill: RecurringTemplate | null,
 ): FormState {
   if (transaction) {
     return {
@@ -28,6 +31,19 @@ function createInitialState(
       category: transaction.category,
       memo: transaction.memo ?? "",
       date: transaction.date,
+    };
+  }
+
+  if (prefill) {
+    const category = categories.includes(prefill.category)
+      ? prefill.category
+      : (categories[0] ?? "");
+    return {
+      type: prefill.type,
+      amount: String(prefill.amount),
+      category,
+      memo: prefill.memo ?? "",
+      date: new Date().toISOString().slice(0, 10),
     };
   }
 
@@ -44,11 +60,12 @@ export function AddTransactionModal({
   open,
   categories,
   initialTransaction,
+  prefillTemplate,
   onClose,
   onSubmit,
 }: AddTransactionModalProps) {
   const [form, setForm] = useState<FormState>(() =>
-    createInitialState(categories, initialTransaction),
+    createInitialState(categories, initialTransaction, prefillTemplate),
   );
 
   useEffect(() => {
@@ -56,8 +73,8 @@ export function AddTransactionModal({
       return;
     }
 
-    setForm(createInitialState(categories, initialTransaction));
-  }, [categories, initialTransaction, open]);
+    setForm(createInitialState(categories, initialTransaction, prefillTemplate));
+  }, [categories, initialTransaction, open, prefillTemplate]);
 
   const title = useMemo(
     () => (initialTransaction ? "거래 수정" : "새 거래 추가"),

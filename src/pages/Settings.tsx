@@ -2,6 +2,7 @@ import { type ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useAppContext } from "../context/AppContext";
 import { backupToJsonString, parseBackupJson } from "../utils/backup";
 import { formatCurrency } from "../utils/formatCurrency";
+import { RecurringManageScreen } from "./RecurringManageScreen";
 
 export function Settings() {
   const {
@@ -16,6 +17,7 @@ export function Settings() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [draftBudget, setDraftBudget] = useState(String(budget));
   const [draftCategory, setDraftCategory] = useState("");
+  const [recurringScreenOpen, setRecurringScreenOpen] = useState(false);
 
   useEffect(() => {
     setDraftBudget(String(budget));
@@ -40,7 +42,7 @@ export function Settings() {
 
   const handleResetData = () => {
     const ok = window.confirm(
-      "모든 거래·예산 설정을 지우고 기본 카테고리만 남길까요?\n이 작업은 되돌릴 수 없습니다.",
+      "모든 거래·예산·반복 프리셋을 지우고 기본 카테고리만 남길까요?\n이 작업은 되돌릴 수 없습니다.",
     );
     if (!ok) {
       return;
@@ -91,7 +93,7 @@ export function Settings() {
     }
 
     const ok = window.confirm(
-      "현재 앱에 있는 거래·카테고리·예산이 모두 이 파일 내용으로 바뀝니다. 계속할까요?",
+      "현재 앱에 있는 거래·카테고리·예산·반복 프리셋이 모두 이 파일 내용으로 바뀝니다. 계속할까요?",
     );
     if (!ok) {
       return;
@@ -102,7 +104,11 @@ export function Settings() {
   };
 
   return (
-    <div className="space-y-5">
+    <>
+      {recurringScreenOpen && (
+        <RecurringManageScreen onClose={() => setRecurringScreenOpen(false)} />
+      )}
+      <div className="space-y-5">
       <section className="rounded-[28px] bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.08)]">
         <div className="flex items-start justify-between gap-4">
           <div>
@@ -195,12 +201,25 @@ export function Settings() {
         </div>
       </section>
 
+      <section className="rounded-[28px] bg-white p-0 shadow-[0_10px_30px_rgba(15,23,42,0.08)]">
+        <button
+          type="button"
+          onClick={() => setRecurringScreenOpen(true)}
+          className="flex w-full items-center justify-between gap-4 rounded-[28px] px-5 py-5 text-left transition active:bg-slate-50"
+        >
+          <span className="text-base font-bold text-slate-900">반복 거래 관리</span>
+          <span className="text-lg text-slate-300" aria-hidden>
+            ›
+          </span>
+        </button>
+      </section>
+
       <section className="rounded-[28px] bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.08)]">
         <div>
           <h3 className="text-base font-bold text-slate-900">백업 · 복원</h3>
           <p className="mt-1 text-sm text-slate-400">
-            거래 내역·카테고리·월 예산을 JSON 파일로 저장하거나, 같은 형식의
-            파일을 불러올 수 있어요.
+            거래 내역·카테고리·월 예산·반복 프리셋을 JSON 파일로 저장하거나, 같은
+            형식의 파일을 불러올 수 있어요.
           </p>
         </div>
         <input
@@ -232,8 +251,8 @@ export function Settings() {
         <div>
           <h3 className="text-base font-bold text-slate-900">데이터 초기화</h3>
           <p className="mt-1 text-sm text-slate-500">
-            브라우저에 저장된 가계부 데이터(거래, 예산)를 모두 지웁니다. 기본
-            카테고리 목록은 유지됩니다.
+            브라우저에 저장된 가계부 데이터(거래, 예산, 반복 프리셋)를 모두
+            지웁니다. 기본 카테고리 목록은 유지됩니다.
           </p>
         </div>
         <button
@@ -245,5 +264,6 @@ export function Settings() {
         </button>
       </section>
     </div>
+    </>
   );
 }

@@ -7,7 +7,12 @@ import {
   type PropsWithChildren,
 } from "react";
 import { useLocalStorage } from "../hooks/useLocalStorage";
-import type { AppAction, AppContextValue, AppState } from "../types";
+import type {
+  AppAction,
+  AppContextValue,
+  AppState,
+  RecurringTemplate,
+} from "../types";
 
 export const BUDGET_APP_STORAGE_KEY = "budget-app-state";
 
@@ -33,6 +38,7 @@ const DEFAULT_STATE: AppState = {
   ],
   categories: ["식비", "교통", "쇼핑", "생활", "월급", "부수입"],
   budget: 800000,
+  recurringTemplates: [],
 };
 
 /** 설정에서 「데이터 초기화」 시 적용: 거래 삭제, 기본 카테고리·예산 0 */
@@ -40,7 +46,15 @@ const RESET_STATE: AppState = {
   transactions: [],
   categories: ["식비", "교통", "쇼핑", "생활", "월급", "부수입"],
   budget: 0,
+  recurringTemplates: [],
 };
+
+function withRecurringTemplates(state: AppState): AppState {
+  return {
+    ...state,
+    recurringTemplates: state.recurringTemplates ?? [],
+  };
+}
 
 function appReducer(state: AppState, action: AppAction): AppState {
   switch (action.type) {
@@ -89,6 +103,18 @@ function appReducer(state: AppState, action: AppAction): AppState {
       };
     case "reset":
       return action.payload;
+    case "add-recurring-template":
+      return {
+        ...state,
+        recurringTemplates: [...state.recurringTemplates, action.payload],
+      };
+    case "remove-recurring-template":
+      return {
+        ...state,
+        recurringTemplates: state.recurringTemplates.filter(
+          (t) => t.id !== action.payload,
+        ),
+      };
     default:
       return state;
   }
@@ -101,7 +127,7 @@ export function AppProvider({ children }: PropsWithChildren) {
     BUDGET_APP_STORAGE_KEY,
     DEFAULT_STATE,
   );
-  const [state, dispatch] = useReducer(appReducer, storedState);
+  const [state, dispatch] = useReducer(appReducer, withRecurringTemplates(storedState));
 
   useEffect(() => {
     setStoredState(state);
@@ -137,10 +163,16 @@ export function AppProvider({ children }: PropsWithChildren) {
         dispatch({ type: "reset", payload: RESET_STATE });
       },
       importBackup: (next) => {
-        dispatch({ type: "reset", payload: next });
+        dispatch({ type: "reset", payload: withRecurringTemplates(next) });
+      },
+      addRecurringTemplate: (template: RecurringTemplate) => {
+        dispatch({ type: "add-recurring-template", payload: template });
+      },
+      removeRecurringTemplate: (id: string) => {
+        dispatch({ type: "remove-recurring-template", payload: id });
       },
     }),
-    [setStoredState, state],
+    [state],
   );
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
