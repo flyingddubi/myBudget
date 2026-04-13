@@ -1,0 +1,110 @@
+🎯 목표
+
+모바일 중심의 초간단 가계부 웹 앱 MVP를 구현한다.
+
+핵심 목표:
+
+3초 내 지출 입력
+직관적인 UI
+LocalStorage 기반 데이터 유지
+🧱 기술 요구사항
+React + Vite
+TypeScript
+Tailwind CSS
+상태관리: useReducer + Context API
+데이터 저장: LocalStorage
+반응형: 모바일 퍼스트
+📦 기능 요구사항
+1. 거래 입력 (핵심)
+수입 / 지출 선택
+금액 입력 (숫자 키패드 스타일)
+카테고리 선택
+메모 (옵션)
+날짜 (기본 오늘)
+
+👉 입력은 모달 형태
+
+2. 거래 리스트
+최신순 정렬
+날짜별 그룹핑
+삭제 / 수정 가능
+3. 통계
+월별 총 지출
+카테고리별 소비 비율
+수입 vs 지출 비교
+4. 예산 기능
+월 예산 설정
+사용률 표시 (progress bar)
+초과 시 강조 UI
+5. 카테고리
+
+기본 제공:
+
+식비
+교통
+쇼핑
+생활
+수입
+💾 데이터 구조
+type Transaction = {
+  id: string;
+  type: 'income' | 'expense';
+  amount: number;
+  category: string;
+  memo?: string;
+  date: string;
+};
+🧠 상태 구조
+type State = {
+  transactions: Transaction[];
+  categories: string[];
+  budget: number;
+};
+📂 폴더 구조
+src/
+ ├── components/
+ │    ├── TransactionList.tsx
+ │    ├── TransactionItem.tsx
+ │    ├── AddTransactionModal.tsx
+ │    ├── BottomNav.tsx
+ │
+ ├── pages/
+ │    ├── Home.tsx
+ │    ├── Stats.tsx
+ │    ├── Settings.tsx
+ │
+ ├── context/
+ │    ├── AppContext.tsx
+ │
+ ├── hooks/
+ │    ├── useLocalStorage.ts
+ │
+ ├── utils/
+ │    ├── formatCurrency.ts
+ │    ├── calculateStats.ts
+ │
+ ├── types/
+ │    ├── index.ts
+🎨 UI/UX 요구사항
+전체 스타일
+모바일 앱 느낌
+최대 width: 420px
+가운데 정렬
+부드러운 shadow + rounded
+홈 화면
+상단: 이번 달 총 지출
+중간: 거래 리스트
+하단: FAB 버튼 (+)
+FAB 버튼
+우측 하단 고정
+클릭 시 입력 모달
+통계 화면
+파이 차트
+요약 카드
+설정 화면
+예산 설정
+카테고리 관리
+⚡ 핵심 UX 규칙
+입력은 3 step 이하
+클릭 영역 최소 44px
+애니메이션 부드럽게
