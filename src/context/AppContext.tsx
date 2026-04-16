@@ -108,6 +108,13 @@ function appReducer(state: AppState, action: AppAction): AppState {
         ...state,
         recurringTemplates: [...state.recurringTemplates, action.payload],
       };
+    case "update-recurring-template":
+      return {
+        ...state,
+        recurringTemplates: state.recurringTemplates.map((t) =>
+          t.id === action.payload.id ? action.payload : t,
+        ),
+      };
     case "remove-recurring-template":
       return {
         ...state,
@@ -167,6 +174,9 @@ export function AppProvider({ children }: PropsWithChildren) {
       },
       addRecurringTemplate: (template: RecurringTemplate) => {
         dispatch({ type: "add-recurring-template", payload: template });
+      },
+      updateRecurringTemplate: (template: RecurringTemplate) => {
+        dispatch({ type: "update-recurring-template", payload: template });
       },
       removeRecurringTemplate: (id: string) => {
         dispatch({ type: "remove-recurring-template", payload: id });

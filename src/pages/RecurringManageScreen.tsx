@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useAppContext } from "../context/AppContext";
 import { formatCurrency } from "../utils/formatCurrency";
-import type { TransactionType } from "../types";
+import type { RecurringTemplate, TransactionType } from "../types";
 
 type RecurringManageScreenProps = {
   onClose: () => void;
@@ -11,9 +11,11 @@ export function RecurringManageScreen({ onClose }: RecurringManageScreenProps) {
   const {
     state: { categories, recurringTemplates },
     addRecurringTemplate,
+    updateRecurringTemplate,
     removeRecurringTemplate,
   } = useAppContext();
 
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [recurringName, setRecurringName] = useState("");
   const [recurringType, setRecurringType] = useState<TransactionType>("expense");
   const [recurringAmount, setRecurringAmount] = useState("");
@@ -26,7 +28,25 @@ export function RecurringManageScreen({ onClose }: RecurringManageScreenProps) {
     }
   }, [categories, recurringCategory]);
 
-  const handleAddRecurringTemplate = () => {
+  const resetFormForNew = () => {
+    setEditingId(null);
+    setRecurringName("");
+    setRecurringAmount("");
+    setRecurringMemo("");
+    setRecurringType("expense");
+    setRecurringCategory(categories[0] ?? "");
+  };
+
+  const loadTemplateForEdit = (tpl: RecurringTemplate) => {
+    setEditingId(tpl.id);
+    setRecurringName(tpl.name);
+    setRecurringType(tpl.type);
+    setRecurringAmount(String(tpl.amount));
+    setRecurringCategory(tpl.category);
+    setRecurringMemo(tpl.memo ?? "");
+  };
+
+  const handleSaveRecurringTemplate = () => {
     const name = recurringName.trim();
     const raw = Number(recurringAmount);
     if (!name) {
@@ -43,17 +63,20 @@ export function RecurringManageScreen({ onClose }: RecurringManageScreenProps) {
       return;
     }
     const memo = recurringMemo.trim();
-    addRecurringTemplate({
-      id: crypto.randomUUID(),
+    const payload: RecurringTemplate = {
+      id: editingId ?? crypto.randomUUID(),
       name,
       type: recurringType,
       amount: Math.round(raw),
       category: cat,
       ...(memo ? { memo } : {}),
-    });
-    setRecurringName("");
-    setRecurringAmount("");
-    setRecurringMemo("");
+    };
+    if (editingId) {
+      updateRecurringTemplate(payload);
+    } else {
+      addRecurringTemplate(payload);
+    }
+    resetFormForNew();
   };
 
   return (
@@ -88,7 +111,20 @@ export function RecurringManageScreen({ onClose }: RecurringManageScreenProps) {
 
         <div className="space-y-5">
           <section className="rounded-[28px] bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.08)]">
-            <h2 className="text-base font-bold text-slate-900">새 반복 항목</h2>
+            <div className="flex items-start justify-between gap-2">
+              <h2 className="text-base font-bold text-slate-900">
+                {editingId ? "반복 항목 수정" : "새 반복 항목"}
+              </h2>
+              {editingId && (
+                <button
+                  type="button"
+                  onClick={resetFormForNew}
+                  className="shrink-0 rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-600"
+                >
+                  수정 취소
+                </button>
+              )}
+            </div>
             <div className="mt-4 space-y-3">
               <label className="block">
                 <span className="mb-2 block text-sm font-semibold text-slate-700">
@@ -176,10 +212,10 @@ export function RecurringManageScreen({ onClose }: RecurringManageScreenProps) {
 
               <button
                 type="button"
-                onClick={handleAddRecurringTemplate}
+                onClick={handleSaveRecurringTemplate}
                 className="w-full rounded-[20px] bg-indigo-500 px-4 py-4 text-sm font-bold text-white shadow-sm transition active:scale-[0.99]"
               >
-                반복 항목 추가
+                {editingId ? "변경 저장" : "반복 항목 추가"}
               </button>
             </div>
           </section>
@@ -188,19 +224,28 @@ export function RecurringManageScreen({ onClose }: RecurringManageScreenProps) {
             <section className="rounded-[28px] bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.08)]">
               <h2 className="text-base font-bold text-slate-900">저장된 항목</h2>
               <ul className="mt-4 space-y-2">
-                {recurringTemplates.map((tpl) => (
+                {recurringTemplates.map((tpl) => {
+                  const subline = [tpl.category, tpl.memo].filter(Boolean).join(" · ");
+                  return (
                   <li
                     key={tpl.id}
-                    className="flex items-center justify-between gap-3 rounded-[20px] bg-slate-50 px-4 py-3"
+                    className="flex min-h-[4.25rem] items-center justify-between gap-3 rounded-[20px] bg-slate-50 px-4 py-3"
                   >
-                    <div className="min-w-0 flex-1">
-                      <p className="font-semibold text-slate-900">{tpl.name}</p>
-                      <p className="mt-0.5 text-xs text-slate-500">
-                        {tpl.category}
-                        {tpl.memo ? ` · ${tpl.memo}` : ""}
+                    <div className="min-w-0 flex-1 overflow-hidden">
+                      <p
+                        className="truncate font-semibold text-slate-900"
+                        title={tpl.name}
+                      >
+                        {tpl.name}
+                      </p>
+                      <p
+                        className="mt-0.5 truncate text-xs text-slate-500"
+                        title={subline || undefined}
+                      >
+                        {subline || "\u00a0"}
                       </p>
                     </div>
-                    <div className="flex shrink-0 items-center gap-2">
+                    <div className="flex shrink-0 flex-nowrap items-center justify-end gap-2">
                       <span
                         className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
                           tpl.type === "expense"
@@ -215,14 +260,27 @@ export function RecurringManageScreen({ onClose }: RecurringManageScreenProps) {
                       </span>
                       <button
                         type="button"
-                        onClick={() => removeRecurringTemplate(tpl.id)}
+                        onClick={() => loadTemplateForEdit(tpl)}
+                        className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-indigo-600 shadow-sm"
+                      >
+                        수정
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (editingId === tpl.id) {
+                            resetFormForNew();
+                          }
+                          removeRecurringTemplate(tpl.id);
+                        }}
                         className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-rose-500 shadow-sm"
                       >
                         삭제
                       </button>
                     </div>
                   </li>
-                ))}
+                  );
+                })}
               </ul>
             </section>
           )}

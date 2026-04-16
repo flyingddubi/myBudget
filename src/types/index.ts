@@ -35,6 +35,7 @@ export type AppAction =
   | { type: "remove-category"; payload: string }
   | { type: "reset"; payload: AppState }
   | { type: "add-recurring-template"; payload: RecurringTemplate }
+  | { type: "update-recurring-template"; payload: RecurringTemplate }
   | { type: "remove-recurring-template"; payload: string };
 
 export type AppContextValue = {
@@ -48,6 +49,7 @@ export type AppContextValue = {
   resetAllData: () => void;
   importBackup: (next: AppState) => void;
   addRecurringTemplate: (template: RecurringTemplate) => void;
+  updateRecurringTemplate: (template: RecurringTemplate) => void;
   removeRecurringTemplate: (id: string) => void;
 };
 
