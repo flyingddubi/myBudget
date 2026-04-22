@@ -1,11 +1,17 @@
-import { useMemo, useState } from "react";
+import { App as CapacitorApp } from "@capacitor/app";
+import { Capacitor } from "@capacitor/core";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { AddTransactionModal } from "./components/AddTransactionModal";
 import { BottomNav } from "./components/BottomNav";
 import { useAppContext } from "./context/AppContext";
+import { HARDWARE_BACK_EVENT } from "./hardwareBack";
 import { Home } from "./pages/Home";
 import { Settings } from "./pages/Settings";
 import { Stats } from "./pages/Stats";
 import type { PageKey, RecurringTemplate, Transaction } from "./types";
+
+const EXIT_CONFIRM_MS = 2000;
 
 type FabOverlay = "none" | "choose" | "recurring";
 
@@ -46,21 +52,21 @@ function FloatingAddCluster({
           onClick={onMainClick}
         />
       )}
-      <div className="pointer-events-none fixed inset-x-0 bottom-24 z-[35] mx-auto flex w-full max-w-[420px] justify-end px-5">
+      <div className="pointer-events-none fixed inset-x-0 bottom-[calc(4.75rem+var(--sab))] z-[35] mx-auto flex w-full max-w-[420px] justify-end px-5 [transform:translateZ(0)]">
         <div className="pointer-events-auto flex flex-col items-end gap-3">
           {chooseOpen && (
             <div className="flex flex-row gap-3">
               <button
                 type="button"
                 onClick={onChooseNew}
-                className="flex h-15 w-15 shrink-0 items-center justify-center rounded-full bg-indigo-500 text-sm font-bold text-white shadow-[0_18px_30px_rgba(99,102,241,0.4)] transition active:scale-95"
+                className="flex h-15 w-15 shrink-0 items-center justify-center rounded-full bg-indigo-500 text-xs font-bold text-white shadow-[0_18px_30px_rgba(99,102,241,0.4)] transition active:scale-95"
               >
                 신규
               </button>
               <button
                 type="button"
                 onClick={onChooseRecurring}
-                className="flex h-15 w-15 shrink-0 items-center justify-center rounded-full bg-indigo-500 text-sm font-bold text-white shadow-[0_18px_30px_rgba(99,102,241,0.4)] transition active:scale-95"
+                className="flex h-15 w-15 shrink-0 items-center justify-center rounded-full bg-indigo-500 text-xs font-bold text-white shadow-[0_18px_30px_rgba(99,102,241,0.4)] transition active:scale-95"
               >
                 반복
               </button>
@@ -69,10 +75,12 @@ function FloatingAddCluster({
           <button
             type="button"
             onClick={onMainClick}
-            className="h-15 w-15 rounded-full bg-indigo-500 text-3xl font-light leading-none text-white shadow-[0_18px_30px_rgba(99,102,241,0.4)] transition active:scale-95"
+            className="grid h-15 w-15 shrink-0 place-items-center rounded-full bg-indigo-500 text-3xl font-light leading-none text-white shadow-[0_18px_30px_rgba(99,102,241,0.4)] transition active:scale-95"
             aria-label={chooseOpen ? "메뉴 닫기" : "거래 추가"}
           >
-            {chooseOpen ? "×" : "+"}
+            <span className="-translate-y-[0.06em] leading-none select-none">
+              {chooseOpen ? "×" : "+"}
+            </span>
           </button>
         </div>
       </div>
@@ -95,6 +103,78 @@ export default function App() {
   const [prefillRecurring, setPrefillRecurring] = useState<RecurringTemplate | null>(
     null,
   );
+  const [exitToast, setExitToast] = useState(false);
+
+  const lastBackPressRef = useRef(0);
+  const backStateRef = useRef({
+    modalOpen: false,
+    fabOverlay: "none" as FabOverlay,
+  });
+
+  backStateRef.current.modalOpen = modalOpen;
+  backStateRef.current.fabOverlay = fabOverlay;
+
+  useEffect(() => {
+    if (currentPage !== "home") {
+      setFabOverlay("none");
+    }
+  }, [currentPage]);
+
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform() || Capacitor.getPlatform() !== "android") {
+      return;
+    }
+
+    let handle: { remove: () => Promise<void> } | undefined;
+    let cancelled = false;
+
+    void CapacitorApp.addListener("backButton", async ({ canGoBack }) => {
+      const delegated = new CustomEvent(HARDWARE_BACK_EVENT, { cancelable: true });
+      window.dispatchEvent(delegated);
+      if (delegated.defaultPrevented) {
+        return;
+      }
+
+      const { modalOpen: open, fabOverlay: fab } = backStateRef.current;
+
+      if (open) {
+        setModalOpen(false);
+        setEditingTransaction(null);
+        setPrefillRecurring(null);
+        return;
+      }
+
+      if (fab === "recurring" || fab === "choose") {
+        setFabOverlay("none");
+        return;
+      }
+
+      if (canGoBack) {
+        window.history.back();
+        return;
+      }
+
+      const now = Date.now();
+      if (now - lastBackPressRef.current < EXIT_CONFIRM_MS) {
+        await CapacitorApp.exitApp();
+        return;
+      }
+      lastBackPressRef.current = now;
+      setExitToast(true);
+      window.setTimeout(() => setExitToast(false), EXIT_CONFIRM_MS);
+    }).then((h) => {
+      if (cancelled) {
+        void h.remove();
+      } else {
+        handle = h;
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      void handle?.remove();
+    };
+  }, []);
 
   const currentMeta = useMemo(() => PAGE_META[currentPage], [currentPage]);
 
@@ -161,39 +241,50 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(99,102,241,0.18),_transparent_38%),linear-gradient(180deg,#f8fafc_0%,#eef2ff_100%)]">
-      <div className="mx-auto min-h-screen w-full max-w-[420px] px-4 pb-28 pt-6">
-        <header className="mb-6">
-          <p className="text-sm font-semibold text-indigo-500">
-            {new Date().toLocaleDateString("ko-KR", {
-              month: "long",
-              day: "numeric",
-              weekday: "long",
-            })}
-          </p>
-          <h1 className="mt-2 text-3xl font-bold tracking-tight text-slate-900">
-            {currentMeta.title}
-          </h1>
-          <p className="mt-2 text-sm leading-6 text-slate-500">
-            {currentMeta.subtitle}
-          </p>
-        </header>
+    <>
+      <div className="flex h-full min-h-0 flex-col overflow-hidden bg-[radial-gradient(circle_at_top,_rgba(99,102,241,0.18),_transparent_38%),linear-gradient(180deg,#f8fafc_0%,#eef2ff_100%)]">
+        <div
+          id="app-main-scroll"
+          className="mx-auto flex min-h-0 w-full max-w-[420px] flex-1 flex-col overflow-y-auto overscroll-y-contain px-4 pb-[calc(7rem+var(--sab))] pt-6 touch-pan-y"
+        >
+          <header className="mb-6 shrink-0">
+            <p className="text-sm font-semibold text-indigo-500">
+              {new Date().toLocaleDateString("ko-KR", {
+                month: "long",
+                day: "numeric",
+                weekday: "long",
+              })}
+            </p>
+            <h1 className="mt-2 text-3xl font-bold tracking-tight text-slate-900">
+              {currentMeta.title}
+            </h1>
+            <p className="mt-2 text-sm leading-6 text-slate-500">
+              {currentMeta.subtitle}
+            </p>
+          </header>
 
-        <main>{renderPage()}</main>
+          <main>{renderPage()}</main>
+        </div>
       </div>
 
-      <FloatingAddCluster
-        chooseOpen={fabOverlay === "choose"}
-        onMainClick={handleFabMainClick}
-        onChooseNew={handleChooseNew}
-        onChooseRecurring={handleChooseRecurring}
-      />
-
-      <BottomNav currentPage={currentPage} onChange={setCurrentPage} />
+      {createPortal(
+        <>
+          {currentPage === "home" ? (
+            <FloatingAddCluster
+              chooseOpen={fabOverlay === "choose"}
+              onMainClick={handleFabMainClick}
+              onChooseNew={handleChooseNew}
+              onChooseRecurring={handleChooseRecurring}
+            />
+          ) : null}
+          <BottomNav currentPage={currentPage} onChange={setCurrentPage} />
+        </>,
+        document.body,
+      )}
 
       {fabOverlay === "recurring" && (
         <div
-          className="fixed inset-0 z-40 flex items-end justify-center bg-slate-950/45 px-4 pb-28 pt-10"
+          className="fixed inset-0 z-40 flex items-end justify-center bg-slate-950/45 px-4 pb-[calc(7rem+var(--sab))] pt-10"
           role="presentation"
           onClick={closeFabOverlay}
         >
@@ -271,6 +362,16 @@ export default function App() {
         }}
         onSubmit={handleSubmitTransaction}
       />
-    </div>
+
+      {exitToast && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="pointer-events-none fixed bottom-[calc(8rem+var(--sab))] left-1/2 z-[200] max-w-[min(90vw,360px)] -translate-x-1/2 rounded-full bg-slate-900/92 px-4 py-2.5 text-center text-sm font-medium text-white shadow-lg"
+        >
+          두번누르면 앱이 종료됩니다.
+        </div>
+      )}
+    </>
   );
 }

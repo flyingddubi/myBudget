@@ -35,13 +35,6 @@ export function TransactionItem({
           <p className="mt-2 text-base font-semibold text-slate-900">
             {transaction.memo?.trim() || "메모 없음"}
           </p>
-          <p className="mt-1 text-sm text-slate-400">
-            {new Date(transaction.date).toLocaleDateString("ko-KR", {
-              year: "numeric",
-              month: "long",
-              day: "numeric",
-            })}
-          </p>
         </div>
 
         <div className="text-right">
@@ -57,14 +50,14 @@ export function TransactionItem({
             <button
               type="button"
               onClick={() => onEdit(transaction)}
-              className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-600"
+              className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-600"
             >
               수정
             </button>
             <button
               type="button"
               onClick={() => onDelete(transaction.id)}
-              className="rounded-full bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-600"
+              className="rounded-full bg-rose-50 px-2.5 py-1 text-[11px] font-semibold text-rose-600"
             >
               삭제
             </button>

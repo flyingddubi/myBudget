@@ -1,4 +1,10 @@
-import { useCallback, useMemo, useState } from "react";
+import {
+  useCallback,
+  useMemo,
+  useRef,
+  useState,
+  type FocusEvent,
+} from "react";
 import {
   Bar,
   BarChart,
@@ -14,6 +20,7 @@ import {
   YAxis,
 } from "recharts";
 import { useAppContext } from "../context/AppContext";
+import { StatsBannerAd } from "../components/StatsBannerAd";
 import { calculateStats } from "../utils/calculateStats";
 import { formatCurrency } from "../utils/formatCurrency";
 import { isYmdInMonth } from "../utils/aggregateByDate";
@@ -80,7 +87,7 @@ function YearlyFlowView({
             최근 12개월(이번 달 포함) 수입·지출 추이예요.
           </p>
         </div>
-        <div className="h-[340px] w-full">
+        <div className="h-[340px] w-full [&_.recharts-wrapper_*:focus]:outline-none [&_.recharts-surface]:outline-none [&_circle:focus]:outline-none [&_path:focus]:outline-none [&_rect:focus]:outline-none">
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 8 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
@@ -108,6 +115,7 @@ function YearlyFlowView({
                 fill="#f43f5e"
                 radius={[6, 6, 0, 0]}
                 maxBarSize={28}
+                activeBar={false}
               />
               <Line
                 type="monotone"
@@ -233,6 +241,28 @@ export function Stats() {
   const [statsView, setStatsView] = useState<"main" | "yearly">("main");
   const [detailCategory, setDetailCategory] = useState<string | null>(null);
   const [viewMonth, setViewMonth] = useState(() => startOfMonth(new Date()));
+  const categoryPieWrapRef = useRef<HTMLDivElement>(null);
+
+  /** Recharts 파이 조각 포커스 시 스크롤 보정으로 하단 고정 탭이 튀는 현상 방지 */
+  const handleCategoryPieFocusCapture = useCallback(
+    (event: FocusEvent<HTMLDivElement>) => {
+      const target = event.target;
+      if (!(target instanceof Element)) {
+        return;
+      }
+      if (!categoryPieWrapRef.current?.contains(target)) {
+        return;
+      }
+      if (
+        target instanceof SVGElement ||
+        target.closest(".recharts-wrapper") !== null
+      ) {
+        (target as HTMLElement).blur();
+      }
+    },
+    [],
+  );
+
   const {
     state: { transactions, budget },
   } = useAppContext();
@@ -384,6 +414,8 @@ export function Stats() {
         </div>
       </section>
 
+      <StatsBannerAd />
+
       <section className="rounded-[28px] bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.08)]">
         <div className="mb-4">
           <h3 className="text-base font-bold text-slate-900">카테고리별 소비</h3>
@@ -399,9 +431,14 @@ export function Stats() {
           </p>
         ) : (
           <>
-            <div className="h-56">
+            <div
+              ref={categoryPieWrapRef}
+              className="h-56 touch-manipulation select-none [-webkit-tap-highlight-color:transparent] [&_.recharts-wrapper_*:focus]:outline-none [&_.recharts-surface]:outline-none [&_path:focus]:outline-none [&_path]:outline-none [&_svg_*:focus]:outline-none"
+              style={{ WebkitTapHighlightColor: "transparent" }}
+              onFocusCapture={handleCategoryPieFocusCapture}
+            >
               <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
+                <PieChart accessibilityLayer={false}>
                   <Pie
                     data={categoryBreakdown}
                     dataKey="value"
@@ -409,6 +446,7 @@ export function Stats() {
                     innerRadius={56}
                     outerRadius={84}
                     paddingAngle={4}
+                    activeShape={false}
                   >
                     {categoryBreakdown.map((entry, index) => (
                       <Cell
@@ -417,7 +455,10 @@ export function Stats() {
                       />
                     ))}
                   </Pie>
-                  <Tooltip formatter={formatTooltipValue} />
+                  <Tooltip
+                    formatter={formatTooltipValue}
+                    cursor={{ fill: "transparent" }}
+                  />
                 </PieChart>
               </ResponsiveContainer>
             </div>
@@ -464,13 +505,19 @@ export function Stats() {
             이번 달 흐름을 한 번에 볼 수 있어요.
           </p>
         </div>
-        <div className="h-60">
+        <div
+          className="h-60 touch-manipulation select-none [-webkit-tap-highlight-color:transparent] [&_.recharts-wrapper_*:focus]:outline-none [&_.recharts-surface]:outline-none [&_path:focus]:outline-none [&_rect:focus]:outline-none [&_rect]:outline-none"
+          style={{ WebkitTapHighlightColor: "transparent" }}
+        >
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={compareData}>
               <XAxis dataKey="name" tickLine={false} axisLine={false} />
               <YAxis hide />
-              <Tooltip formatter={formatTooltipValue} />
-              <Bar dataKey="amount" radius={[14, 14, 0, 0]}>
+              <Tooltip
+                formatter={formatTooltipValue}
+                cursor={{ fill: "transparent" }}
+              />
+              <Bar dataKey="amount" radius={[14, 14, 0, 0]} activeBar={false}>
                 <Cell fill="#10b981" />
                 <Cell fill="#f43f5e" />
               </Bar>

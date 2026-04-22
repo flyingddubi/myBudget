@@ -27,101 +27,186 @@ export function Home({ onEditTransaction }: HomeProps) {
 
   const [calendarView, setCalendarView] = useState<CalendarViewMode>("day");
   const [cursorMonth, setCursorMonth] = useState(() => startOfMonth(new Date()));
-  const [selectedDate, setSelectedDate] = useState(() => toYmd(new Date()));
+  const [selectedDate, setSelectedDate] = useState<string | null>(() =>
+    toYmd(new Date()),
+  );
+  /** 주간 달력에서 어떤 주를 보여줄지 (selectedDate와 독립) */
+  const [weekAnchorYmd, setWeekAnchorYmd] = useState(() => toYmd(new Date()));
+  /** 주간·월간에서 달력에서 특정 일을 눌렀을 때만 그날만 필터 */
+  const [dayDrillDown, setDayDrillDown] = useState(false);
 
   const byDate = useMemo(() => aggregateByDate(transactions), [transactions]);
 
+  const handleViewModeChange = (mode: CalendarViewMode) => {
+    setDayDrillDown(false);
+    if (mode === "week") {
+      const anchor = selectedDate ?? weekAnchorYmd ?? toYmd(new Date());
+      setWeekAnchorYmd(anchor);
+      setCursorMonth(startOfMonth(parseYmd(anchor)));
+      setSelectedDate(null);
+    } else if (mode === "month") {
+      const ref = selectedDate ?? weekAnchorYmd ?? toYmd(new Date());
+      setCursorMonth(startOfMonth(parseYmd(ref)));
+      setSelectedDate(null);
+    } else {
+      setSelectedDate((prev) => prev ?? weekAnchorYmd ?? toYmd(new Date()));
+    }
+    setCalendarView(mode);
+  };
+
   const filteredTransactions = useMemo(() => {
     if (calendarView === "day") {
-      return transactions.filter((transaction) => transaction.date === selectedDate);
+      const ymd = selectedDate ?? toYmd(new Date());
+      return transactions.filter((transaction) => transaction.date === ymd);
     }
 
     if (calendarView === "week") {
-      const weekSet = new Set(getWeekDateStringsFromYmd(selectedDate));
+      if (dayDrillDown && selectedDate) {
+        return transactions.filter((transaction) => transaction.date === selectedDate);
+      }
+      const weekSet = new Set(getWeekDateStringsFromYmd(weekAnchorYmd));
       return transactions.filter((transaction) => weekSet.has(transaction.date));
+    }
+
+    if (dayDrillDown && selectedDate) {
+      return transactions.filter((transaction) => transaction.date === selectedDate);
     }
 
     return transactions.filter((transaction) =>
       isYmdInMonth(transaction.date, cursorMonth),
     );
-  }, [transactions, calendarView, selectedDate, cursorMonth]);
+  }, [
+    transactions,
+    calendarView,
+    selectedDate,
+    cursorMonth,
+    dayDrillDown,
+    weekAnchorYmd,
+  ]);
+
+  const handleSelectDate = (ymd: string) => {
+    if (calendarView === "week" || calendarView === "month") {
+      if (ymd === selectedDate && dayDrillDown) {
+        setDayDrillDown(false);
+        setSelectedDate(null);
+        return;
+      }
+      setSelectedDate(ymd);
+      setDayDrillDown(true);
+      return;
+    }
+    setSelectedDate(ymd);
+  };
 
   const handleNavigatePrev = () => {
     if (calendarView === "week") {
-      const d = parseYmd(selectedDate);
+      setDayDrillDown(false);
+      setSelectedDate(null);
+      const d = parseYmd(weekAnchorYmd);
       d.setDate(d.getDate() - 7);
-      setSelectedDate(toYmd(d));
+      setWeekAnchorYmd(toYmd(d));
       setCursorMonth(startOfMonth(d));
       return;
     }
 
     if (calendarView === "day") {
-      const d = parseYmd(selectedDate);
+      const base = selectedDate ?? toYmd(new Date());
+      const d = parseYmd(base);
       d.setDate(d.getDate() - 1);
       setSelectedDate(toYmd(d));
       setCursorMonth(startOfMonth(d));
       return;
     }
 
+    setDayDrillDown(false);
+    setSelectedDate(null);
     const next = new Date(cursorMonth);
     next.setMonth(next.getMonth() - 1);
     const nextMonth = startOfMonth(next);
     setCursorMonth(nextMonth);
-    if (!isYmdInMonth(selectedDate, nextMonth)) {
-      setSelectedDate(toYmd(nextMonth));
+  };
+
+  const handleDeleteTransaction = (transactionId: string) => {
+    if (!window.confirm("삭제하시겠습니까?")) {
+      return;
     }
+    deleteTransaction(transactionId);
   };
 
   const handleNavigateNext = () => {
     if (calendarView === "week") {
-      const d = parseYmd(selectedDate);
+      setDayDrillDown(false);
+      setSelectedDate(null);
+      const d = parseYmd(weekAnchorYmd);
       d.setDate(d.getDate() + 7);
-      setSelectedDate(toYmd(d));
+      setWeekAnchorYmd(toYmd(d));
       setCursorMonth(startOfMonth(d));
       return;
     }
 
     if (calendarView === "day") {
-      const d = parseYmd(selectedDate);
+      const base = selectedDate ?? toYmd(new Date());
+      const d = parseYmd(base);
       d.setDate(d.getDate() + 1);
       setSelectedDate(toYmd(d));
       setCursorMonth(startOfMonth(d));
       return;
     }
 
+    setDayDrillDown(false);
+    setSelectedDate(null);
     const next = new Date(cursorMonth);
     next.setMonth(next.getMonth() + 1);
     const nextMonth = startOfMonth(next);
     setCursorMonth(nextMonth);
-    if (!isYmdInMonth(selectedDate, nextMonth)) {
-      setSelectedDate(toYmd(nextMonth));
-    }
   };
 
-  const listSubtitle =
-    calendarView === "day"
-      ? `${parseYmd(selectedDate).toLocaleDateString("ko-KR", {
+  const listSubtitle = useMemo(() => {
+    if (calendarView === "day") {
+      const ymd = selectedDate ?? toYmd(new Date());
+      return `${parseYmd(ymd).toLocaleDateString("ko-KR", {
+        month: "long",
+        day: "numeric",
+        weekday: "short",
+      })} 거래`;
+    }
+
+    if (calendarView === "week") {
+      if (dayDrillDown && selectedDate) {
+        return `${parseYmd(selectedDate).toLocaleDateString("ko-KR", {
           month: "long",
           day: "numeric",
           weekday: "short",
-        })} 거래`
-      : calendarView === "week"
-        ? "이번 주 거래"
-        : `${cursorMonth.toLocaleDateString("ko-KR", {
-            year: "numeric",
-            month: "long",
-          })} 거래`;
+        })} 거래`;
+      }
+      return "이번 주 거래";
+    }
+
+    if (dayDrillDown && selectedDate) {
+      return `${parseYmd(selectedDate).toLocaleDateString("ko-KR", {
+        month: "long",
+        day: "numeric",
+        weekday: "short",
+      })} 거래`;
+    }
+
+    return `${cursorMonth.toLocaleDateString("ko-KR", {
+      year: "numeric",
+      month: "long",
+    })} 거래`;
+  }, [calendarView, cursorMonth, dayDrillDown, selectedDate]);
 
   return (
     <div className="space-y-5">
       <HomeCalendar
         viewMode={calendarView}
-        onViewModeChange={setCalendarView}
+        onViewModeChange={handleViewModeChange}
         cursorMonth={cursorMonth}
         onNavigatePrev={handleNavigatePrev}
         onNavigateNext={handleNavigateNext}
         selectedDate={selectedDate}
-        onSelectDate={setSelectedDate}
+        weekRangeAnchorYmd={weekAnchorYmd}
+        onSelectDate={handleSelectDate}
         byDate={byDate}
       />
 
@@ -134,7 +219,7 @@ export function Home({ onEditTransaction }: HomeProps) {
         <TransactionList
           transactions={filteredTransactions}
           onEdit={onEditTransaction}
-          onDelete={deleteTransaction}
+          onDelete={handleDeleteTransaction}
         />
       </section>
     </div>

@@ -1,0 +1,9 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">가계부</string>
+    <string name="title_activity_main">가계부</string>
+    <string name="package_name">com.doyoun.mybudget</string>
+    <string name="custom_url_scheme">com.doyoun.mybudget</string>
+    <!-- AdMob 앱 ID (콘솔 앱 설정, 형식: ca-app-pub-xxx~yyy — 배너 단위 ID와 혼동 주의) -->
+    <string name="admob_app_id">ca-app-pub-7720771434894108~1594918771</string>
+</resources>

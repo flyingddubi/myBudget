@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { formatCurrency } from "../utils/formatCurrency";
+import { formatAmountManUnit, formatCurrency } from "../utils/formatCurrency";
 import {
   getWeekDateStringsFromYmd,
   parseYmd,
@@ -16,12 +16,37 @@ type HomeCalendarProps = {
   cursorMonth: Date;
   onNavigatePrev: () => void;
   onNavigateNext: () => void;
-  selectedDate: string;
+  /** 일간: 항상 날짜. 주간·월간: null이면 달력에 선택 하이라이트 없음 */
+  selectedDate: string | null;
+  /** 주간 뷰에서 표시할 주(이 날짜가 속한 주) */
+  weekRangeAnchorYmd: string;
   onSelectDate: (date: string) => void;
   byDate: Map<string, DayTotals>;
 };
 
 const WEEKDAY_LABELS = ["일", "월", "화", "수", "목", "금", "토"];
+
+function IncomeExpenseLegend({ className }: { className?: string }) {
+  return (
+    <div
+      className={`flex flex-col items-center gap-1 ${className ?? ""}`}
+      role="note"
+      aria-label="수입은 초록색, 지출은 빨간색 숫자이며 단위는 만 원입니다"
+    >
+      <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-1 text-[11px] text-slate-600">
+        <span className="flex items-center gap-1.5">
+          <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-500" aria-hidden />
+          수입
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="h-2 w-2 shrink-0 rounded-full bg-rose-500" aria-hidden />
+          지출
+        </span>
+      </div>
+      <p className="text-[10px] text-slate-400">단위: 만 원</p>
+    </div>
+  );
+}
 
 function getMonthMatrix(anchor: Date): (Date | null)[][] {
   const year = anchor.getFullYear();
@@ -75,40 +100,40 @@ function MiniDayCell({
 }) {
   const income = totals?.income ?? 0;
   const expense = totals?.expense ?? 0;
+  const fmtIn = formatAmountManUnit(income);
+  const fmtOut = formatAmountManUnit(expense);
+
+  const dateCorner = compact ? "left-1.5 top-1.5" : "left-2 top-2";
 
   return (
     <button
       type="button"
       onClick={onSelect}
-      className={`flex min-h-[44px] flex-col items-stretch rounded-2xl border text-left transition active:scale-[0.98] ${
+      className={`relative flex flex-col items-stretch overflow-visible rounded-2xl border text-left transition active:scale-[0.98] ${
         isSelected
           ? "border-indigo-500 bg-indigo-50 shadow-[0_8px_20px_rgba(99,102,241,0.2)]"
           : "border-slate-100 bg-slate-50/80"
-      } ${compact ? "p-1.5" : "p-2"}`}
+      } ${compact ? "min-h-[52px] p-1.5" : "min-h-[56px] p-2"}`}
     >
-      <div className="flex items-center justify-between gap-1">
-        <span
-          className={`text-xs font-bold ${
-            isToday ? "text-indigo-600" : "text-slate-700"
-          }`}
-        >
-          {date.getDate()}
-        </span>
-        {isToday ? (
-          <span className="rounded-full bg-indigo-100 px-1.5 py-0.5 text-[9px] font-semibold text-indigo-700">
-            오늘
-          </span>
-        ) : null}
-      </div>
-      <div
-        className={`mt-1 space-y-0.5 ${compact ? "text-[9px] leading-tight" : "text-[10px] leading-tight"}`}
+      <span
+        className={`pointer-events-none absolute ${dateCorner} text-xs font-bold ${
+          isToday ? "text-indigo-600" : "text-slate-700"
+        }`}
       >
-        <p className="truncate font-medium text-emerald-600">
-          수 {formatCurrency(income)}
-        </p>
-        <p className="truncate font-medium text-rose-600">
-          지 {formatCurrency(expense)}
-        </p>
+        {date.getDate()}
+      </span>
+      {isToday ? (
+        <span
+          className="pointer-events-none absolute right-0 top-0 flex translate-x-1/2 -translate-y-1/2 items-center justify-center whitespace-nowrap rounded-full bg-indigo-100 px-[5px] py-px text-[7px] font-semibold leading-none text-indigo-700"
+        >
+          오늘
+        </span>
+      ) : null}
+      <div
+        className={`space-y-px ${compact ? "pt-6 text-[8px] leading-tight" : "pt-7 text-[9px] leading-snug"}`}
+      >
+        <p className="break-all font-medium tabular-nums text-emerald-600">{fmtIn}</p>
+        <p className="break-all font-medium tabular-nums text-rose-600">{fmtOut}</p>
       </div>
     </button>
   );
@@ -121,10 +146,13 @@ export function HomeCalendar({
   onNavigatePrev,
   onNavigateNext,
   selectedDate,
+  weekRangeAnchorYmd,
   onSelectDate,
   byDate,
 }: HomeCalendarProps) {
   const todayYmd = useMemo(() => toYmd(new Date()), []);
+
+  const dayModeYmd = selectedDate ?? todayYmd;
 
   const monthLabel = useMemo(
     () =>
@@ -138,8 +166,8 @@ export function HomeCalendar({
   const monthMatrix = useMemo(() => getMonthMatrix(cursorMonth), [cursorMonth]);
 
   const weekDates = useMemo(
-    () => getWeekDateStringsFromYmd(selectedDate),
-    [selectedDate],
+    () => getWeekDateStringsFromYmd(weekRangeAnchorYmd),
+    [weekRangeAnchorYmd],
   );
 
   const monthDateStrings = useMemo(
@@ -182,18 +210,18 @@ export function HomeCalendar({
   }, [weekDates]);
 
   const dayDetailLabel = useMemo(() => {
-    const d = parseYmd(selectedDate);
+    const d = parseYmd(dayModeYmd);
     return d.toLocaleDateString("ko-KR", {
       year: "numeric",
       month: "long",
       day: "numeric",
       weekday: "long",
     });
-  }, [selectedDate]);
+  }, [dayModeYmd]);
 
   const selectedDayTotals = useMemo(
-    () => byDate.get(selectedDate) ?? { income: 0, expense: 0 },
-    [byDate, selectedDate],
+    () => byDate.get(dayModeYmd) ?? { income: 0, expense: 0 },
+    [byDate, dayModeYmd],
   );
 
   const navAriaPrev =
@@ -233,7 +261,7 @@ export function HomeCalendar({
               key={item.key}
               type="button"
               onClick={() => onViewModeChange(item.key)}
-              className={`rounded-xl px-3 py-2 text-xs font-semibold transition ${
+              className={`rounded-xl px-2.5 py-1.5 text-[11px] font-semibold transition ${
                 viewMode === item.key
                   ? "bg-white text-slate-900 shadow-sm"
                   : "text-slate-500"
@@ -275,7 +303,7 @@ export function HomeCalendar({
         <div className="mt-4 rounded-[24px] border border-slate-100 bg-gradient-to-br from-slate-50 to-indigo-50/40 p-5 shadow-inner">
           <div className="flex items-center justify-between gap-2">
             <p className="text-xs font-semibold text-slate-500">선택한 하루</p>
-            {selectedDate === todayYmd ? (
+            {dayModeYmd === todayYmd ? (
               <span className="rounded-full bg-indigo-100 px-2.5 py-1 text-[11px] font-bold text-indigo-700">
                 오늘
               </span>
@@ -303,7 +331,8 @@ export function HomeCalendar({
 
       {viewMode === "month" ? (
         <>
-          <div className="mt-3 grid grid-cols-7 gap-1 text-center text-[11px] font-semibold text-slate-400">
+          <IncomeExpenseLegend className="mt-3" />
+          <div className="mt-2 grid grid-cols-7 gap-1 text-center text-[11px] font-semibold text-slate-400">
             {WEEKDAY_LABELS.map((label) => (
               <span key={label}>{label}</span>
             ))}
@@ -317,14 +346,15 @@ export function HomeCalendar({
                     return (
                       <div
                         key={`empty-${rowIndex}-${colIndex}`}
-                        className="min-h-[44px] rounded-2xl bg-transparent"
+                        className="min-h-[52px] rounded-2xl bg-transparent"
                       />
                     );
                   }
 
                   const ymd = toYmd(cell);
                   const totals = byDate.get(ymd);
-                  const isSelected = ymd === selectedDate;
+                  const isSelected =
+                    selectedDate !== null && ymd === selectedDate;
                   const isToday = ymd === todayYmd;
 
                   return (
@@ -345,6 +375,7 @@ export function HomeCalendar({
         </>
       ) : viewMode === "week" ? (
         <div className="mt-4 space-y-3">
+          <IncomeExpenseLegend />
           <div className="grid grid-cols-7 gap-1 text-center text-[11px] font-semibold text-slate-400">
             {WEEKDAY_LABELS.map((label) => (
               <span key={label}>{label}</span>
@@ -354,7 +385,8 @@ export function HomeCalendar({
             {weekDates.map((ymd) => {
               const cell = parseYmd(ymd);
               const totals = byDate.get(ymd);
-              const isSelected = ymd === selectedDate;
+              const isSelected =
+                selectedDate !== null && ymd === selectedDate;
               const isToday = ymd === todayYmd;
 
               return (

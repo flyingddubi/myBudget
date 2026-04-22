@@ -108,22 +108,23 @@ export function AddTransactionModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/45 px-4 pb-4 pt-10">
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/45 px-4 pb-[calc(1rem+var(--sab))] pt-10">
       <div className="w-full max-w-[420px] rounded-[32px] bg-white p-5 shadow-[0_20px_60px_rgba(15,23,42,0.3)]">
-        <div className="mb-5 flex items-center justify-between">
-          <div>
+        <div className="mb-5">
+          <div className="flex items-center justify-between gap-3">
             <p className="text-lg font-bold text-slate-900">{title}</p>
-            <p className="mt-1 text-sm text-slate-400">
-              3단계 안에 빠르게 입력할 수 있게 구성했어요.
-            </p>
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-lg font-light leading-none text-slate-500"
+              aria-label="닫기"
+            >
+              ×
+            </button>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-full bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-500"
-          >
-            닫기
-          </button>
+          <p className="mt-1 text-sm text-slate-400">
+            3단계 안에 빠르게 입력할 수 있게 구성했어요.
+          </p>
         </div>
 
         <form className="space-y-4" onSubmit={handleSubmit}>
@@ -181,7 +182,7 @@ export function AddTransactionModal({
                 onChange={(event) =>
                   setForm((prev) => ({ ...prev, category: event.target.value }))
                 }
-                className="w-full rounded-[20px] border border-slate-200 bg-slate-50 px-4 py-4 text-sm font-medium text-slate-900 outline-none transition focus:border-slate-400"
+                className="w-full rounded-[20px] border border-slate-200 bg-slate-50 px-3 py-3 text-xs font-medium text-slate-900 outline-none transition focus:border-slate-400"
               >
                 {categories.map((category) => (
                   <option key={category} value={category}>
@@ -201,7 +202,7 @@ export function AddTransactionModal({
                 onChange={(event) =>
                   setForm((prev) => ({ ...prev, date: event.target.value }))
                 }
-                className="w-full rounded-[20px] border border-slate-200 bg-slate-50 px-4 py-4 text-sm font-medium text-slate-900 outline-none transition focus:border-slate-400"
+                className="w-full rounded-[20px] border border-slate-200 bg-slate-50 px-3 py-3 text-xs font-medium text-slate-900 outline-none transition focus:border-slate-400"
               />
             </label>
           </div>

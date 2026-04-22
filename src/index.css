@@ -1,6 +1,11 @@
 @import "tailwindcss";
 
 :root {
+  /* Android 내비게이션 바 / 홈 인디케이터 등 시스템 영역 (viewport-fit=cover 필요) */
+  --sab: env(safe-area-inset-bottom, 0px);
+  /** WebView에서 sab가 0일 때 소프트키·제스처 바 높이만큼이라도 확보 */
+  /* 소프트키·3버튼 내비 등 sab가 0일 때도 대부분 기기에서 하단이 가려지지 않게 */
+  --bottom-overlay-pad: max(var(--sab), 80px);
   color: #0f172a;
   background: #f8fafc;
   font-family:
@@ -20,22 +25,26 @@
   box-sizing: border-box;
 }
 
-html,
-body,
-#root {
-  min-height: 100%;
+/* 하단 fixed 탭/FAB 튐 방지: 뷰포트는 문서 루트에서 스크롤하지 않고, 앱 안쪽만 스크롤 */
+html {
+  height: 100%;
+  height: 100dvh;
   margin: 0;
+  overflow: hidden;
+  overscroll-behavior: none;
 }
 
 body {
   min-width: 320px;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  overscroll-behavior: none;
 }
 
-button,
-input,
-select,
-textarea {
-  font: inherit;
+#root {
+  height: 100%;
+  overflow: hidden;
 }
 
 button {
