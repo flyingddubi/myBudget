@@ -1,4 +1,4 @@
-/** `.env` 에 `VITE_ADMOB_DEBUG=true` 이면 통계 배너 슬롯에 상태 문구 표시 */
+/** `.env` 에 `VITE_ADMOB_DEBUG=true` 이면 통계 광고 슬롯에 상태 문구 표시 */
 export function isAdMobDebugOverlay(): boolean {
   return import.meta.env.VITE_ADMOB_DEBUG === "true";
 }

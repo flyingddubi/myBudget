@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { useI18n } from "../i18n";
 import { formatAmountManUnit, formatCurrency } from "../utils/formatCurrency";
 import {
   getWeekDateStringsFromYmd,
@@ -24,26 +25,35 @@ type HomeCalendarProps = {
   byDate: Map<string, DayTotals>;
 };
 
-const WEEKDAY_LABELS = ["일", "월", "화", "수", "목", "금", "토"];
-
-function IncomeExpenseLegend({ className }: { className?: string }) {
+function IncomeExpenseLegend({
+  className,
+  labels,
+}: {
+  className?: string;
+  labels: {
+    legendAria: string;
+    income: string;
+    expense: string;
+    unit: string;
+  };
+}) {
   return (
     <div
       className={`flex flex-col items-center gap-1 ${className ?? ""}`}
       role="note"
-      aria-label="수입은 초록색, 지출은 빨간색 숫자이며 단위는 만 원입니다"
+      aria-label={labels.legendAria}
     >
       <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-1 text-[11px] text-slate-600">
         <span className="flex items-center gap-1.5">
           <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-500" aria-hidden />
-          수입
+          {labels.income}
         </span>
         <span className="flex items-center gap-1.5">
           <span className="h-2 w-2 shrink-0 rounded-full bg-rose-500" aria-hidden />
-          지출
+          {labels.expense}
         </span>
       </div>
-      <p className="text-[10px] text-slate-400">단위: 만 원</p>
+      <p className="text-[10px] text-slate-400">{labels.unit}</p>
     </div>
   );
 }
@@ -90,6 +100,7 @@ function MiniDayCell({
   isToday,
   onSelect,
   compact,
+  todayLabel,
 }: {
   date: Date;
   totals: DayTotals | undefined;
@@ -97,6 +108,7 @@ function MiniDayCell({
   isToday: boolean;
   onSelect: () => void;
   compact: boolean;
+  todayLabel: string;
 }) {
   const income = totals?.income ?? 0;
   const expense = totals?.expense ?? 0;
@@ -126,7 +138,7 @@ function MiniDayCell({
         <span
           className="pointer-events-none absolute right-0 top-0 flex translate-x-1/2 -translate-y-1/2 items-center justify-center whitespace-nowrap rounded-full bg-indigo-100 px-[5px] py-px text-[7px] font-semibold leading-none text-indigo-700"
         >
-          오늘
+          {todayLabel}
         </span>
       ) : null}
       <div
@@ -150,17 +162,22 @@ export function HomeCalendar({
   onSelectDate,
   byDate,
 }: HomeCalendarProps) {
+  const { localeTag, messages } = useI18n();
+  const WEEKDAY_LABELS =
+    localeTag === "ko-KR"
+      ? ["일", "월", "화", "수", "목", "금", "토"]
+      : ["日", "一", "二", "三", "四", "五", "六"];
   const todayYmd = useMemo(() => toYmd(new Date()), []);
 
   const dayModeYmd = selectedDate ?? todayYmd;
 
   const monthLabel = useMemo(
     () =>
-      cursorMonth.toLocaleDateString("ko-KR", {
+      cursorMonth.toLocaleDateString(localeTag, {
         year: "numeric",
         month: "long",
       }),
-    [cursorMonth],
+    [cursorMonth, localeTag],
   );
 
   const monthMatrix = useMemo(() => getMonthMatrix(cursorMonth), [cursorMonth]);
@@ -189,35 +206,35 @@ export function HomeCalendar({
     const start = parseYmd(weekDates[0]!);
     const end = parseYmd(weekDates[6]!);
     const sameMonth = start.getMonth() === end.getMonth();
-    const startText = start.toLocaleDateString("ko-KR", {
+    const startText = start.toLocaleDateString(localeTag, {
       month: "numeric",
       day: "numeric",
     });
-    const endText = end.toLocaleDateString("ko-KR", {
+    const endText = end.toLocaleDateString(localeTag, {
       month: "numeric",
       day: "numeric",
     });
     if (sameMonth) {
       return `${startText} ~ ${endText}`;
     }
-    return `${start.toLocaleDateString("ko-KR", {
+    return `${start.toLocaleDateString(localeTag, {
       month: "long",
       day: "numeric",
-    })} ~ ${end.toLocaleDateString("ko-KR", {
+    })} ~ ${end.toLocaleDateString(localeTag, {
       month: "long",
       day: "numeric",
     })}`;
-  }, [weekDates]);
+  }, [localeTag, weekDates]);
 
   const dayDetailLabel = useMemo(() => {
     const d = parseYmd(dayModeYmd);
-    return d.toLocaleDateString("ko-KR", {
+    return d.toLocaleDateString(localeTag, {
       year: "numeric",
       month: "long",
       day: "numeric",
       weekday: "long",
     });
-  }, [dayModeYmd]);
+  }, [dayModeYmd, localeTag]);
 
   const selectedDayTotals = useMemo(
     () => byDate.get(dayModeYmd) ?? { income: 0, expense: 0 },
@@ -226,17 +243,17 @@ export function HomeCalendar({
 
   const navAriaPrev =
     viewMode === "day"
-      ? "이전 날"
+      ? messages.calendar.prevDay
       : viewMode === "week"
-        ? "이전 주"
-        : "이전 달";
+        ? messages.calendar.prevWeek
+        : messages.calendar.prevMonth;
 
   const navAriaNext =
     viewMode === "day"
-      ? "다음 날"
+      ? messages.calendar.nextDay
       : viewMode === "week"
-        ? "다음 주"
-        : "다음 달";
+        ? messages.calendar.nextWeek
+        : messages.calendar.nextMonth;
 
   const headerTitle =
     viewMode === "day"
@@ -248,13 +265,13 @@ export function HomeCalendar({
   return (
     <section className="rounded-[28px] bg-white p-4 shadow-[0_10px_30px_rgba(15,23,42,0.08)]">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm font-bold text-slate-900">달력</p>
+        <p className="text-sm font-bold text-slate-900">{messages.calendar.title}</p>
         <div className="flex rounded-2xl bg-slate-100 p-1">
           {(
             [
-              { key: "day" as const, label: "일간" },
-              { key: "week" as const, label: "주간" },
-              { key: "month" as const, label: "월간" },
+              { key: "day" as const, label: messages.calendar.day },
+              { key: "week" as const, label: messages.calendar.week },
+              { key: "month" as const, label: messages.calendar.month },
             ] as const
           ).map((item) => (
             <button
@@ -302,36 +319,50 @@ export function HomeCalendar({
       {viewMode === "day" ? (
         <div className="mt-4 rounded-[24px] border border-slate-100 bg-gradient-to-br from-slate-50 to-indigo-50/40 p-5 shadow-inner">
           <div className="flex items-center justify-between gap-2">
-            <p className="text-xs font-semibold text-slate-500">선택한 하루</p>
+            <p className="text-xs font-semibold text-slate-500">
+              {messages.calendar.selectedDay}
+            </p>
             {dayModeYmd === todayYmd ? (
               <span className="rounded-full bg-indigo-100 px-2.5 py-1 text-[11px] font-bold text-indigo-700">
-                오늘
+                {messages.common.today}
               </span>
             ) : null}
           </div>
           <div className="mt-4 grid grid-cols-2 gap-3">
             <div className="rounded-[20px] bg-white p-4 shadow-sm">
-              <p className="text-[11px] font-semibold text-slate-400">수입</p>
+              <p className="text-[11px] font-semibold text-slate-400">
+                {messages.common.income}
+              </p>
               <p className="mt-1 text-lg font-bold text-emerald-600">
                 {formatCurrency(selectedDayTotals.income)}
               </p>
             </div>
             <div className="rounded-[20px] bg-white p-4 shadow-sm">
-              <p className="text-[11px] font-semibold text-slate-400">지출</p>
+              <p className="text-[11px] font-semibold text-slate-400">
+                {messages.common.expense}
+              </p>
               <p className="mt-1 text-lg font-bold text-rose-600">
                 {formatCurrency(selectedDayTotals.expense)}
               </p>
             </div>
           </div>
           <p className="mt-4 text-center text-[11px] text-slate-400">
-            ‹ › 로 하루씩 이동할 수 있어요.
+            {messages.calendar.oneDayMoveHint}
           </p>
         </div>
       ) : null}
 
       {viewMode === "month" ? (
         <>
-          <IncomeExpenseLegend className="mt-3" />
+          <IncomeExpenseLegend
+            className="mt-3"
+            labels={{
+              legendAria: messages.calendar.legendAria,
+              income: messages.common.income,
+              expense: messages.common.expense,
+              unit: messages.calendar.unitManWon,
+            }}
+          />
           <div className="mt-2 grid grid-cols-7 gap-1 text-center text-[11px] font-semibold text-slate-400">
             {WEEKDAY_LABELS.map((label) => (
               <span key={label}>{label}</span>
@@ -366,6 +397,7 @@ export function HomeCalendar({
                       isToday={isToday}
                       onSelect={() => onSelectDate(ymd)}
                       compact
+                      todayLabel={messages.common.today}
                     />
                   );
                 })}
@@ -375,7 +407,14 @@ export function HomeCalendar({
         </>
       ) : viewMode === "week" ? (
         <div className="mt-4 space-y-3">
-          <IncomeExpenseLegend />
+          <IncomeExpenseLegend
+            labels={{
+              legendAria: messages.calendar.legendAria,
+              income: messages.common.income,
+              expense: messages.common.expense,
+              unit: messages.calendar.unitManWon,
+            }}
+          />
           <div className="grid grid-cols-7 gap-1 text-center text-[11px] font-semibold text-slate-400">
             {WEEKDAY_LABELS.map((label) => (
               <span key={label}>{label}</span>
@@ -398,23 +437,26 @@ export function HomeCalendar({
                   isToday={isToday}
                   onSelect={() => onSelectDate(ymd)}
                   compact={false}
+                  todayLabel={messages.common.today}
                 />
               );
             })}
           </div>
 
           <div className="rounded-[22px] border border-slate-100 bg-slate-50 px-4 py-3">
-            <p className="text-xs font-semibold text-slate-500">이번 주 합계</p>
+            <p className="text-xs font-semibold text-slate-500">
+              {messages.calendar.weekTotal}
+            </p>
             <div className="mt-2 flex items-center justify-between gap-3 text-sm">
               <div>
-                <p className="text-[11px] text-slate-400">수입</p>
+                <p className="text-[11px] text-slate-400">{messages.common.income}</p>
                 <p className="font-bold text-emerald-600">
                   {formatCurrency(weekTotals.income)}
                 </p>
               </div>
               <div className="h-8 w-px bg-slate-200" />
               <div>
-                <p className="text-[11px] text-slate-400">지출</p>
+                <p className="text-[11px] text-slate-400">{messages.common.expense}</p>
                 <p className="font-bold text-rose-600">
                   {formatCurrency(weekTotals.expense)}
                 </p>
@@ -426,17 +468,19 @@ export function HomeCalendar({
 
       {viewMode === "month" ? (
         <div className="mt-3 rounded-[22px] border border-slate-100 bg-slate-50 px-4 py-3">
-          <p className="text-xs font-semibold text-slate-500">이번 달 합계</p>
+          <p className="text-xs font-semibold text-slate-500">
+            {messages.calendar.monthTotal}
+          </p>
           <div className="mt-2 flex items-center justify-between gap-3 text-sm">
             <div>
-              <p className="text-[11px] text-slate-400">수입</p>
+              <p className="text-[11px] text-slate-400">{messages.common.income}</p>
               <p className="font-bold text-emerald-600">
                 {formatCurrency(monthTotals.income)}
               </p>
             </div>
             <div className="h-8 w-px bg-slate-200" />
             <div>
-              <p className="text-[11px] text-slate-400">지출</p>
+              <p className="text-[11px] text-slate-400">{messages.common.expense}</p>
               <p className="font-bold text-rose-600">
                 {formatCurrency(monthTotals.expense)}
               </p>

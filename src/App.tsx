@@ -6,8 +6,9 @@ import { AddTransactionModal } from "./components/AddTransactionModal";
 import { BottomNav } from "./components/BottomNav";
 import { useAppContext } from "./context/AppContext";
 import { HARDWARE_BACK_EVENT } from "./hardwareBack";
+import { useI18n } from "./i18n";
 import { Home } from "./pages/Home";
-import { Settings } from "./pages/Settings";
+import { Settings, type SettingsView } from "./pages/Settings";
 import { Stats } from "./pages/Stats";
 import type { PageKey, RecurringTemplate, Transaction } from "./types";
 
@@ -15,31 +16,23 @@ const EXIT_CONFIRM_MS = 2000;
 
 type FabOverlay = "none" | "choose" | "recurring";
 
-const PAGE_META: Record<PageKey, { title: string; subtitle: string }> = {
-  home: {
-    title: "내 가계부",
-    subtitle: "오늘도 가볍게 수입과 지출을 기록해보세요.",
-  },
-  stats: {
-    title: "통계",
-    subtitle: "이번 달 돈의 흐름을 한눈에 확인하세요.",
-  },
-  settings: {
-    title: "설정",
-    subtitle: "예산과 카테고리를 취향에 맞게 관리하세요.",
-  },
-};
-
 function FloatingAddCluster({
   chooseOpen,
   onMainClick,
   onChooseNew,
   onChooseRecurring,
+  labels,
 }: {
   chooseOpen: boolean;
   onMainClick: () => void;
   onChooseNew: () => void;
   onChooseRecurring: () => void;
+  labels: {
+    new: string;
+    recurring: string;
+    closeMenu: string;
+    addTransaction: string;
+  };
 }) {
   return (
     <>
@@ -61,14 +54,14 @@ function FloatingAddCluster({
                 onClick={onChooseNew}
                 className="flex h-15 w-15 shrink-0 items-center justify-center rounded-full bg-indigo-500 text-xs font-bold text-white shadow-[0_18px_30px_rgba(99,102,241,0.4)] transition active:scale-95"
               >
-                신규
+                {labels.new}
               </button>
               <button
                 type="button"
                 onClick={onChooseRecurring}
                 className="flex h-15 w-15 shrink-0 items-center justify-center rounded-full bg-indigo-500 text-xs font-bold text-white shadow-[0_18px_30px_rgba(99,102,241,0.4)] transition active:scale-95"
               >
-                반복
+                {labels.recurring}
               </button>
             </div>
           )}
@@ -76,7 +69,7 @@ function FloatingAddCluster({
             type="button"
             onClick={onMainClick}
             className="grid h-15 w-15 shrink-0 place-items-center rounded-full bg-indigo-500 text-3xl font-light leading-none text-white shadow-[0_18px_30px_rgba(99,102,241,0.4)] transition active:scale-95"
-            aria-label={chooseOpen ? "메뉴 닫기" : "거래 추가"}
+            aria-label={chooseOpen ? labels.closeMenu : labels.addTransaction}
           >
             <span className="-translate-y-[0.06em] leading-none select-none">
               {chooseOpen ? "×" : "+"}
@@ -89,6 +82,7 @@ function FloatingAddCluster({
 }
 
 export default function App() {
+  const { locale, setLocale, messages, formatDate } = useI18n();
   const {
     state: { categories, recurringTemplates },
     addTransaction,
@@ -100,12 +94,16 @@ export default function App() {
     null,
   );
   const [fabOverlay, setFabOverlay] = useState<FabOverlay>("none");
+  const [settingsMenuOpen, setSettingsMenuOpen] = useState(false);
+  const [settingsView, setSettingsView] = useState<SettingsView>("main");
   const [prefillRecurring, setPrefillRecurring] = useState<RecurringTemplate | null>(
     null,
   );
   const [exitToast, setExitToast] = useState(false);
 
   const lastBackPressRef = useRef(0);
+  const settingsMenuRef = useRef<HTMLDivElement | null>(null);
+  const settingsMenuButtonRef = useRef<HTMLButtonElement | null>(null);
   const backStateRef = useRef({
     modalOpen: false,
     fabOverlay: "none" as FabOverlay,
@@ -119,6 +117,39 @@ export default function App() {
       setFabOverlay("none");
     }
   }, [currentPage]);
+
+  useEffect(() => {
+    if (currentPage !== "settings") {
+      setSettingsMenuOpen(false);
+      setSettingsView("main");
+    }
+  }, [currentPage]);
+
+  useEffect(() => {
+    if (!settingsMenuOpen) {
+      return;
+    }
+
+    const handlePointerDown = (event: MouseEvent | TouchEvent) => {
+      const target = event.target as Node | null;
+      if (!target) {
+        return;
+      }
+
+      const clickedMenu = settingsMenuRef.current?.contains(target);
+      const clickedButton = settingsMenuButtonRef.current?.contains(target);
+      if (!clickedMenu && !clickedButton) {
+        setSettingsMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handlePointerDown);
+    document.addEventListener("touchstart", handlePointerDown);
+    return () => {
+      document.removeEventListener("mousedown", handlePointerDown);
+      document.removeEventListener("touchstart", handlePointerDown);
+    };
+  }, [settingsMenuOpen]);
 
   useEffect(() => {
     if (!Capacitor.isNativePlatform() || Capacitor.getPlatform() !== "android") {
@@ -176,7 +207,21 @@ export default function App() {
     };
   }, []);
 
-  const currentMeta = useMemo(() => PAGE_META[currentPage], [currentPage]);
+  const currentMeta = useMemo(() => {
+    if (currentPage !== "settings") {
+      return messages.app.pageMeta[currentPage];
+    }
+
+    if (settingsView === "privacy") {
+      return messages.app.pageMeta.privacy;
+    }
+
+    if (settingsView === "guide") {
+      return messages.app.pageMeta.guide;
+    }
+
+    return messages.app.pageMeta.settings;
+  }, [currentPage, messages.app.pageMeta, settingsView]);
 
   const handleSubmitTransaction = (transaction: Transaction) => {
     if (editingTransaction) {
@@ -234,11 +279,26 @@ export default function App() {
       case "stats":
         return <Stats />;
       case "settings":
-        return <Settings />;
+        return (
+          <Settings
+            view={settingsView}
+            menuOpen={settingsMenuOpen}
+            onCloseMenu={() => setSettingsMenuOpen(false)}
+            onBackToMain={() => setSettingsView("main")}
+          />
+        );
       default:
         return null;
     }
   };
+
+  const showSettingsMenuButton =
+    currentPage === "settings" && settingsView === "main";
+  const currentDateLabel = formatDate(new Date(), {
+    month: "long",
+    day: "numeric",
+    weekday: "long",
+  });
 
   return (
     <>
@@ -247,20 +307,122 @@ export default function App() {
           id="app-main-scroll"
           className="mx-auto flex min-h-0 w-full max-w-[420px] flex-1 flex-col overflow-y-auto overscroll-y-contain px-4 pb-[calc(7rem+var(--sab))] pt-6 touch-pan-y"
         >
-          <header className="mb-6 shrink-0">
-            <p className="text-sm font-semibold text-indigo-500">
-              {new Date().toLocaleDateString("ko-KR", {
-                month: "long",
-                day: "numeric",
-                weekday: "long",
-              })}
-            </p>
-            <h1 className="mt-2 text-3xl font-bold tracking-tight text-slate-900">
-              {currentMeta.title}
-            </h1>
-            <p className="mt-2 text-sm leading-6 text-slate-500">
-              {currentMeta.subtitle}
-            </p>
+          <header className="relative mb-6 shrink-0">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <h1 className="text-3xl font-bold tracking-tight text-slate-900">
+                    {currentMeta.title}
+                  </h1>
+                  <span className="rounded-full bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-600 ring-1 ring-indigo-100">
+                    {currentDateLabel}
+                  </span>
+                </div>
+                <p className="mt-2 text-sm leading-6 text-slate-500">
+                  {currentMeta.subtitle}
+                </p>
+              </div>
+              {showSettingsMenuButton ? (
+                <button
+                  ref={settingsMenuButtonRef}
+                  type="button"
+                  onClick={() => setSettingsMenuOpen((prev) => !prev)}
+                  className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-white/90 text-slate-700 shadow-sm ring-1 ring-slate-200/80 transition active:scale-[0.97]"
+                  aria-label={
+                    settingsMenuOpen
+                      ? messages.app.settingsMenu.close
+                      : messages.app.settingsMenu.open
+                  }
+                  aria-expanded={settingsMenuOpen}
+                >
+                  <svg
+                    viewBox="0 0 24 24"
+                    className="h-5 w-5"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                  >
+                    <path d="M4 7h16" />
+                    <path d="M4 12h16" />
+                    <path d="M4 17h16" />
+                  </svg>
+                </button>
+              ) : null}
+            </div>
+            {showSettingsMenuButton && settingsMenuOpen ? (
+              <div
+                ref={settingsMenuRef}
+                className="absolute right-0 top-[calc(100%+0.75rem)] z-20 w-[220px] rounded-[28px] bg-white p-3 shadow-[0_20px_40px_rgba(15,23,42,0.18)] ring-1 ring-slate-200/80"
+              >
+                <div className="space-y-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSettingsMenuOpen(false);
+                      setSettingsView("privacy");
+                    }}
+                    className="flex w-full items-center justify-between rounded-[20px] bg-slate-50 px-4 py-4 text-left text-sm font-semibold text-slate-800 transition active:scale-[0.99]"
+                  >
+                    <span>{messages.app.settingsMenu.privacy}</span>
+                    <span className="text-slate-300" aria-hidden>
+                      ›
+                    </span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSettingsMenuOpen(false);
+                      setSettingsView("guide");
+                    }}
+                    className="flex w-full items-center justify-between rounded-[20px] bg-slate-50 px-4 py-4 text-left text-sm font-semibold text-slate-800 transition active:scale-[0.99]"
+                  >
+                    <span>{messages.app.settingsMenu.guide}</span>
+                    <span className="text-slate-300" aria-hidden>
+                      ›
+                    </span>
+                  </button>
+                  <div className="rounded-[20px] bg-slate-50 px-4 py-4 text-left">
+                    <p className="text-sm font-semibold text-slate-800">
+                      {messages.app.settingsMenu.versionTitle}
+                    </p>
+                    <p className="mt-1 text-xs font-medium text-slate-500">
+                      {messages.app.settingsMenu.versionLine}
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 rounded-[20px] bg-slate-50 p-2">
+                    <button
+                      type="button"
+                      onClick={() => setLocale("ko")}
+                      className={`rounded-[16px] px-3 py-3 text-left transition ${
+                        locale === "ko"
+                          ? "bg-white shadow-sm ring-1 ring-slate-200"
+                          : "bg-transparent"
+                      }`}
+                    >
+                      <p className="text-lg leading-none">🇰🇷</p>
+                      <p className="mt-1 text-xs font-semibold text-slate-700">
+                        {messages.app.settingsMenu.languageKo}
+                      </p>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setLocale("zh-TW")}
+                      className={`rounded-[16px] px-3 py-3 text-left transition ${
+                        locale === "zh-TW"
+                          ? "bg-white shadow-sm ring-1 ring-slate-200"
+                          : "bg-transparent"
+                      }`}
+                    >
+                      <p className="text-lg leading-none">🇹🇼</p>
+                      <p className="mt-1 text-xs font-semibold text-slate-700">
+                        {messages.app.settingsMenu.languageZhTw}
+                      </p>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : null}
           </header>
 
           <main>{renderPage()}</main>
@@ -275,6 +437,12 @@ export default function App() {
               onMainClick={handleFabMainClick}
               onChooseNew={handleChooseNew}
               onChooseRecurring={handleChooseRecurring}
+              labels={{
+                new: messages.app.fab.new,
+                recurring: messages.app.fab.recurring,
+                closeMenu: messages.app.fab.closeMenu,
+                addTransaction: messages.app.fab.addTransaction,
+              }}
             />
           ) : null}
           <BottomNav currentPage={currentPage} onChange={setCurrentPage} />
@@ -292,7 +460,7 @@ export default function App() {
             className="w-full max-w-[420px] rounded-[28px] bg-white p-5 shadow-[0_20px_60px_rgba(15,23,42,0.3)]"
             role="dialog"
             aria-modal="true"
-            aria-label="반복 프리셋 선택"
+            aria-label={messages.app.recurringPicker.title}
             onClick={(event) => event.stopPropagation()}
           >
             <div className="space-y-4">
@@ -302,22 +470,22 @@ export default function App() {
                   onClick={() => setFabOverlay("choose")}
                   className="rounded-full bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-600"
                 >
-                  ← 뒤로
+                  ← {messages.common.back}
                 </button>
                 <p className="flex-1 text-center text-lg font-bold text-slate-900">
-                  반복 항목
+                  {messages.app.recurringPicker.title}
                 </p>
                 <button
                   type="button"
                   onClick={closeFabOverlay}
                   className="rounded-full bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-500"
                 >
-                  닫기
+                  {messages.common.close}
                 </button>
               </div>
               {recurringTemplates.length === 0 ? (
                 <p className="rounded-[20px] bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">
-                  등록된 반복 항목이 없습니다. 설정 탭에서 프리셋을 추가해 주세요.
+                  {messages.app.recurringPicker.empty}
                 </p>
               ) : (
                 <ul className="max-h-[min(50vh,320px)] space-y-2 overflow-y-auto pr-1">
@@ -338,7 +506,9 @@ export default function App() {
                               : "bg-emerald-100 text-emerald-700"
                           }`}
                         >
-                          {tpl.type === "expense" ? "지출" : "수입"}
+                          {tpl.type === "expense"
+                            ? messages.common.expense
+                            : messages.common.income}
                         </span>
                       </button>
                     </li>
@@ -369,7 +539,7 @@ export default function App() {
           aria-live="polite"
           className="pointer-events-none fixed bottom-[calc(8rem+var(--sab))] left-1/2 z-[200] max-w-[min(90vw,360px)] -translate-x-1/2 rounded-full bg-slate-900/92 px-4 py-2.5 text-center text-sm font-medium text-white shadow-lg"
         >
-          두번누르면 앱이 종료됩니다.
+          {messages.app.exitToast}
         </div>
       )}
     </>

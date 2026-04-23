@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { HomeCalendar, type CalendarViewMode } from "../components/HomeCalendar";
 import { useAppContext } from "../context/AppContext";
+import { useI18n } from "../i18n";
 import type { Transaction } from "../types";
 import {
   aggregateByDate,
@@ -20,6 +21,7 @@ function startOfMonth(d: Date): Date {
 }
 
 export function Home({ onEditTransaction }: HomeProps) {
+  const { localeTag, messages } = useI18n();
   const {
     state: { transactions },
     deleteTransaction,
@@ -127,7 +129,7 @@ export function Home({ onEditTransaction }: HomeProps) {
   };
 
   const handleDeleteTransaction = (transactionId: string) => {
-    if (!window.confirm("삭제하시겠습니까?")) {
+    if (!window.confirm(messages.transaction.deleteConfirm)) {
       return;
     }
     deleteTransaction(transactionId);
@@ -164,37 +166,37 @@ export function Home({ onEditTransaction }: HomeProps) {
   const listSubtitle = useMemo(() => {
     if (calendarView === "day") {
       const ymd = selectedDate ?? toYmd(new Date());
-      return `${parseYmd(ymd).toLocaleDateString("ko-KR", {
+      return `${parseYmd(ymd).toLocaleDateString(localeTag, {
         month: "long",
         day: "numeric",
         weekday: "short",
-      })} 거래`;
+      })} ${messages.transaction.dayTransactions}`;
     }
 
     if (calendarView === "week") {
       if (dayDrillDown && selectedDate) {
-        return `${parseYmd(selectedDate).toLocaleDateString("ko-KR", {
+        return `${parseYmd(selectedDate).toLocaleDateString(localeTag, {
           month: "long",
           day: "numeric",
           weekday: "short",
-        })} 거래`;
+        })} ${messages.transaction.dayTransactions}`;
       }
-      return "이번 주 거래";
+      return messages.transaction.thisWeekTransactions;
     }
 
     if (dayDrillDown && selectedDate) {
-      return `${parseYmd(selectedDate).toLocaleDateString("ko-KR", {
+      return `${parseYmd(selectedDate).toLocaleDateString(localeTag, {
         month: "long",
         day: "numeric",
         weekday: "short",
-      })} 거래`;
+      })} ${messages.transaction.dayTransactions}`;
     }
 
-    return `${cursorMonth.toLocaleDateString("ko-KR", {
+    return `${cursorMonth.toLocaleDateString(localeTag, {
       year: "numeric",
       month: "long",
-    })} 거래`;
-  }, [calendarView, cursorMonth, dayDrillDown, selectedDate]);
+    })} ${messages.transaction.monthTransactions}`;
+  }, [calendarView, cursorMonth, dayDrillDown, localeTag, messages.transaction, selectedDate]);
 
   return (
     <div className="space-y-5">
@@ -212,7 +214,9 @@ export function Home({ onEditTransaction }: HomeProps) {
 
       <section>
         <div className="mb-3 flex items-center justify-between">
-          <h3 className="text-base font-bold text-slate-900">거래 내역</h3>
+          <h3 className="text-base font-bold text-slate-900">
+            {messages.transaction.historyTitle}
+          </h3>
           <p className="text-sm text-slate-400">{listSubtitle}</p>
         </div>
 

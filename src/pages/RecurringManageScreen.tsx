@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useAppContext } from "../context/AppContext";
+import { useI18n } from "../i18n";
 import { formatCurrency } from "../utils/formatCurrency";
 import type { RecurringTemplate, TransactionType } from "../types";
 
@@ -8,6 +9,7 @@ type RecurringManageScreenProps = {
 };
 
 export function RecurringManageScreen({ onClose }: RecurringManageScreenProps) {
+  const { messages } = useI18n();
   const {
     state: { categories, recurringTemplates },
     addRecurringTemplate,
@@ -50,16 +52,16 @@ export function RecurringManageScreen({ onClose }: RecurringManageScreenProps) {
     const name = recurringName.trim();
     const raw = Number(recurringAmount);
     if (!name) {
-      window.alert("이름을 입력해 주세요.");
+      window.alert(messages.recurring.nameRequired);
       return;
     }
     if (!Number.isFinite(raw) || raw <= 0) {
-      window.alert("금액은 1원 이상으로 입력해 주세요.");
+      window.alert(messages.recurring.amountMin);
       return;
     }
     const cat = recurringCategory.trim() || categories[0];
     if (!cat) {
-      window.alert("카테고리를 먼저 추가해 주세요.");
+      window.alert(messages.recurring.addCategoryFirst);
       return;
     }
     const memo = recurringMemo.trim();
@@ -93,18 +95,17 @@ export function RecurringManageScreen({ onClose }: RecurringManageScreenProps) {
             onClick={onClose}
             className="rounded-full bg-white/90 px-4 py-2.5 text-sm font-semibold text-slate-700 shadow-sm ring-1 ring-slate-200/80 transition active:scale-[0.98]"
           >
-            ← 설정
+          {messages.settings.backToSettings}
           </button>
           <div className="min-w-0 flex-1">
             <h1
               id="recurring-manage-title"
               className="text-xl font-bold tracking-tight text-slate-900"
             >
-              반복 거래 관리
+              {messages.recurring.title}
             </h1>
             <p className="mt-1 text-sm text-slate-500">
-              홈의 + → 「반복」에서 불러올 항목을 저장합니다. 날짜는 추가 시 오늘로
-              채워집니다.
+              {messages.recurring.subtitle}
             </p>
           </div>
         </header>
@@ -113,7 +114,7 @@ export function RecurringManageScreen({ onClose }: RecurringManageScreenProps) {
           <section className="rounded-[28px] bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.08)]">
             <div className="flex items-start justify-between gap-2">
               <h2 className="text-base font-bold text-slate-900">
-                {editingId ? "반복 항목 수정" : "새 반복 항목"}
+                {editingId ? messages.recurring.editItem : messages.recurring.newItem}
               </h2>
               {editingId && (
                 <button
@@ -121,20 +122,20 @@ export function RecurringManageScreen({ onClose }: RecurringManageScreenProps) {
                   onClick={resetFormForNew}
                   className="shrink-0 rounded-full bg-slate-100 px-3 py-1.5 text-xs font-semibold text-slate-600"
                 >
-                  수정 취소
+                  {messages.recurring.cancelEdit}
                 </button>
               )}
             </div>
             <div className="mt-4 space-y-3">
               <label className="block">
                 <span className="mb-2 block text-sm font-semibold text-slate-700">
-                  표시 이름
+                  {messages.recurring.displayName}
                 </span>
                 <input
                   type="text"
                   value={recurringName}
                   onChange={(event) => setRecurringName(event.target.value)}
-                  placeholder="예: 월세, 구독료"
+                  placeholder={messages.recurring.displayNamePlaceholder}
                   className="w-full rounded-[20px] border border-slate-200 bg-slate-50 px-4 py-4 text-sm font-medium text-slate-900 outline-none transition focus:border-slate-400"
                 />
               </label>
@@ -149,7 +150,7 @@ export function RecurringManageScreen({ onClose }: RecurringManageScreenProps) {
                       : "bg-slate-100 text-slate-500"
                   }`}
                 >
-                  지출
+                  {messages.common.expense}
                 </button>
                 <button
                   type="button"
@@ -160,13 +161,13 @@ export function RecurringManageScreen({ onClose }: RecurringManageScreenProps) {
                       : "bg-slate-100 text-slate-500"
                   }`}
                 >
-                  수입
+                  {messages.common.income}
                 </button>
               </div>
 
               <label className="block">
                 <span className="mb-2 block text-sm font-semibold text-slate-700">
-                  금액 (원)
+                  {messages.recurring.amountWon}
                 </span>
                 <input
                   type="number"
@@ -175,14 +176,14 @@ export function RecurringManageScreen({ onClose }: RecurringManageScreenProps) {
                   step="1"
                   value={recurringAmount}
                   onChange={(event) => setRecurringAmount(event.target.value)}
-                  placeholder="예: 50000"
+                  placeholder={messages.recurring.amountPlaceholder}
                   className="w-full rounded-[20px] border border-slate-200 bg-slate-50 px-4 py-4 text-sm font-medium text-slate-900 outline-none transition focus:border-slate-400"
                 />
               </label>
 
               <label className="block">
                 <span className="mb-2 block text-sm font-semibold text-slate-700">
-                  카테고리
+                  {messages.common.category}
                 </span>
                 <select
                   value={recurringCategory || categories[0] || ""}
@@ -199,13 +200,13 @@ export function RecurringManageScreen({ onClose }: RecurringManageScreenProps) {
 
               <label className="block">
                 <span className="mb-2 block text-sm font-semibold text-slate-700">
-                  메모 (선택)
+                  {messages.recurring.optionalMemo}
                 </span>
                 <textarea
                   value={recurringMemo}
                   onChange={(event) => setRecurringMemo(event.target.value)}
                   rows={2}
-                  placeholder="거래 추가 화면에 자동으로 넣을 메모"
+                  placeholder={messages.recurring.memoPlaceholder}
                   className="w-full resize-none rounded-[20px] border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-900 outline-none transition focus:border-slate-400"
                 />
               </label>
@@ -215,14 +216,16 @@ export function RecurringManageScreen({ onClose }: RecurringManageScreenProps) {
                 onClick={handleSaveRecurringTemplate}
                 className="w-full rounded-[20px] bg-indigo-500 px-4 py-4 text-sm font-bold text-white shadow-sm transition active:scale-[0.99]"
               >
-                {editingId ? "변경 저장" : "반복 항목 추가"}
+                {editingId ? messages.recurring.saveChanges : messages.recurring.addItem}
               </button>
             </div>
           </section>
 
           {recurringTemplates.length > 0 && (
             <section className="mb-[calc(2rem+var(--bottom-overlay-pad))] rounded-[28px] bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.08)]">
-              <h2 className="text-base font-bold text-slate-900">저장된 항목</h2>
+              <h2 className="text-base font-bold text-slate-900">
+                {messages.recurring.savedItems}
+              </h2>
               <ul className="mt-4 space-y-2">
                 {recurringTemplates.map((tpl) => {
                   const memo = tpl.memo?.trim();
@@ -254,7 +257,9 @@ export function RecurringManageScreen({ onClose }: RecurringManageScreenProps) {
                               : "bg-emerald-100 text-emerald-700"
                           }`}
                         >
-                          {tpl.type === "expense" ? "지출" : "수입"}
+                          {tpl.type === "expense"
+                            ? messages.common.expense
+                            : messages.common.income}
                         </span>
                         <span className="shrink-0 text-sm font-bold text-slate-800">
                           {formatCurrency(tpl.amount)}
@@ -274,12 +279,12 @@ export function RecurringManageScreen({ onClose }: RecurringManageScreenProps) {
                           onClick={() => loadTemplateForEdit(tpl)}
                           className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-indigo-600 shadow-sm"
                         >
-                          수정
+                          {messages.common.edit}
                         </button>
                         <button
                           type="button"
                           onClick={() => {
-                            if (!window.confirm("삭제하시겠습니까?")) {
+                            if (!window.confirm(messages.recurring.deleteConfirm)) {
                               return;
                             }
                             if (editingId === tpl.id) {
@@ -289,7 +294,7 @@ export function RecurringManageScreen({ onClose }: RecurringManageScreenProps) {
                           }}
                           className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-rose-500 shadow-sm"
                         >
-                          삭제
+                          {messages.common.delete}
                         </button>
                       </div>
                     </div>

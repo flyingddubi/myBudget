@@ -1,4 +1,5 @@
 import type { Transaction } from "../types";
+import { useI18n } from "../i18n";
 import { formatCurrency } from "../utils/formatCurrency";
 
 type TransactionItemProps = {
@@ -12,6 +13,7 @@ export function TransactionItem({
   onEdit,
   onDelete,
 }: TransactionItemProps) {
+  const { messages } = useI18n();
   const isIncome = transaction.type === "income";
 
   return (
@@ -26,14 +28,14 @@ export function TransactionItem({
                   : "bg-rose-100 text-rose-700"
               }`}
             >
-              {isIncome ? "수입" : "지출"}
+              {isIncome ? messages.common.income : messages.common.expense}
             </span>
             <span className="text-sm font-medium text-slate-500">
               {transaction.category}
             </span>
           </div>
           <p className="mt-2 text-base font-semibold text-slate-900">
-            {transaction.memo?.trim() || "메모 없음"}
+            {transaction.memo?.trim() || messages.common.memoNone}
           </p>
         </div>
 
@@ -52,14 +54,14 @@ export function TransactionItem({
               onClick={() => onEdit(transaction)}
               className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-600"
             >
-              수정
+              {messages.common.edit}
             </button>
             <button
               type="button"
               onClick={() => onDelete(transaction.id)}
               className="rounded-full bg-rose-50 px-2.5 py-1 text-[11px] font-semibold text-rose-600"
             >
-              삭제
+              {messages.common.delete}
             </button>
           </div>
         </div>

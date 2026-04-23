@@ -20,6 +20,7 @@ import {
   YAxis,
 } from "recharts";
 import { useAppContext } from "../context/AppContext";
+import { useI18n } from "../i18n";
 import { StatsBannerAd } from "../components/StatsBannerAd";
 import { calculateStats } from "../utils/calculateStats";
 import { formatCurrency } from "../utils/formatCurrency";
@@ -59,6 +60,7 @@ function YearlyFlowView({
   transactions: Transaction[];
   onBack: () => void;
 }) {
+  const { messages } = useI18n();
   const chartData = useMemo(
     () =>
       buildLast12MonthsFlow(transactions).map((row) => ({
@@ -77,14 +79,14 @@ function YearlyFlowView({
         className="flex min-h-[44px] items-center gap-1 rounded-2xl bg-white px-3 py-2 text-sm font-semibold text-slate-600 shadow-[0_8px_24px_rgba(15,23,42,0.08)] active:scale-[0.99]"
       >
         <span className="text-lg leading-none">‹</span>
-        뒤로
+        {messages.common.back}
       </button>
 
       <section className="rounded-[28px] bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.08)]">
         <div className="mb-4">
-          <h3 className="text-base font-bold text-slate-900">연간 흐름</h3>
+          <h3 className="text-base font-bold text-slate-900">{messages.stats.yearlyFlow}</h3>
           <p className="mt-1 text-sm text-slate-400">
-            최근 12개월(이번 달 포함) 수입·지출 추이예요.
+            {messages.stats.yearlyFlowDesc}
           </p>
         </div>
         <div className="h-[340px] w-full [&_.recharts-wrapper_*:focus]:outline-none [&_.recharts-surface]:outline-none [&_circle:focus]:outline-none [&_path:focus]:outline-none [&_rect:focus]:outline-none">
@@ -111,7 +113,7 @@ function YearlyFlowView({
               <Tooltip formatter={formatTooltipValue} />
               <Bar
                 dataKey="expense"
-                name="지출"
+                name={messages.common.expense}
                 fill="#f43f5e"
                 radius={[6, 6, 0, 0]}
                 maxBarSize={28}
@@ -120,7 +122,7 @@ function YearlyFlowView({
               <Line
                 type="monotone"
                 dataKey="income"
-                name="수입"
+                name={messages.common.income}
                 stroke="#10b981"
                 strokeWidth={2.5}
                 dot={{ r: 3, fill: "#10b981", strokeWidth: 0 }}
@@ -132,11 +134,11 @@ function YearlyFlowView({
         <div className="mt-4 flex justify-center gap-6 text-xs text-slate-500">
           <span className="flex items-center gap-2">
             <span className="h-3 w-3 rounded-sm bg-[#f43f5e]" />
-            지출 (막대)
+            {messages.stats.expenseBar}
           </span>
           <span className="flex items-center gap-2">
             <span className="h-0.5 w-6 rounded-full bg-emerald-500" />
-            수입 (선)
+            {messages.stats.incomeLine}
           </span>
         </div>
       </section>
@@ -159,6 +161,7 @@ function CategoryExpenseDetailView({
   transactions: Transaction[];
   onBack: () => void;
 }) {
+  const { localeTag, messages } = useI18n();
   const rows = useMemo(() => {
     return transactions
       .filter(
@@ -170,7 +173,7 @@ function CategoryExpenseDetailView({
       .sort((a, b) => b.date.localeCompare(a.date));
   }, [transactions, categoryName, viewMonth]);
 
-  const monthLabel = viewMonth.toLocaleDateString("ko-KR", {
+  const monthLabel = viewMonth.toLocaleDateString(localeTag, {
     year: "numeric",
     month: "long",
   });
@@ -185,24 +188,25 @@ function CategoryExpenseDetailView({
         className="flex min-h-[44px] items-center gap-1 rounded-2xl bg-white px-3 py-2 text-sm font-semibold text-slate-600 shadow-[0_8px_24px_rgba(15,23,42,0.08)] active:scale-[0.99]"
       >
         <span className="text-lg leading-none">‹</span>
-        뒤로
+        {messages.common.back}
       </button>
 
       <section className="rounded-[28px] bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.08)]">
         <p className="text-sm font-semibold text-slate-500">{monthLabel}</p>
         <h2 className="mt-1 text-xl font-bold text-slate-900">
-          「{categoryName}」 지출 내역
+          「{categoryName}」 {messages.stats.categoryExpenseDetailSuffix}
         </h2>
         <p className="mt-3 text-sm text-slate-500">
-          합계{" "}
+          {messages.stats.total}{" "}
           <span className="font-bold text-rose-600">{formatCurrency(total)}</span> ·{" "}
-          {rows.length}건
+          {rows.length}
+          {messages.common.countSuffix}
         </p>
       </section>
 
       {rows.length === 0 ? (
         <p className="rounded-[24px] bg-slate-50 px-4 py-10 text-center text-sm text-slate-400">
-          이 달 이 카테고리 지출이 없어요.
+          {messages.stats.noCategoryExpense}
         </p>
       ) : (
         <div className="space-y-3">
@@ -214,10 +218,10 @@ function CategoryExpenseDetailView({
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="text-base font-semibold text-slate-900">
-                    {transaction.memo?.trim() || "메모 없음"}
+                    {transaction.memo?.trim() || messages.common.memoNone}
                   </p>
                   <p className="mt-1 text-sm text-slate-400">
-                    {new Date(transaction.date).toLocaleDateString("ko-KR", {
+                    {new Date(transaction.date).toLocaleDateString(localeTag, {
                       year: "numeric",
                       month: "long",
                       day: "numeric",
@@ -238,6 +242,7 @@ function CategoryExpenseDetailView({
 }
 
 export function Stats() {
+  const { localeTag, messages } = useI18n();
   const [statsView, setStatsView] = useState<"main" | "yearly">("main");
   const [detailCategory, setDetailCategory] = useState<string | null>(null);
   const [viewMonth, setViewMonth] = useState(() => startOfMonth(new Date()));
@@ -287,11 +292,11 @@ export function Stats() {
   );
 
   const expenseHeading = isViewingCurrentMonth
-    ? "이번 달 지출"
-    : `${viewMonth.toLocaleDateString("ko-KR", {
+    ? messages.stats.thisMonthExpense
+    : `${viewMonth.toLocaleDateString(localeTag, {
         year: "numeric",
         month: "long",
-      })} 지출`;
+      })} ${messages.common.expense}`;
 
   const goPrevMonth = useCallback(() => {
     setViewMonth((prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
@@ -309,8 +314,8 @@ export function Stats() {
   const budgetExceeded = budget > 0 && monthlyExpenseTotal > budget;
 
   const compareData = [
-    { name: "수입", amount: monthlyIncomeTotal },
-    { name: "지출", amount: monthlyExpenseTotal },
+    { name: messages.common.income, amount: monthlyIncomeTotal },
+    { name: messages.common.expense, amount: monthlyExpenseTotal },
   ];
 
   if (statsView === "yearly") {
@@ -341,7 +346,7 @@ export function Stats() {
             type="button"
             onClick={goPrevMonth}
             className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/10 text-xl font-semibold text-white transition hover:bg-white/20 active:scale-95"
-            aria-label="이전 달 지출"
+            aria-label={messages.stats.prevMonthExpense}
           >
             ‹
           </button>
@@ -357,7 +362,7 @@ export function Stats() {
                 type="button"
                 onClick={goNextMonth}
                 className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/10 text-xl font-semibold text-white transition hover:bg-white/20 active:scale-95"
-                aria-label="다음 달 지출"
+                aria-label={messages.stats.nextMonthExpense}
               >
                 ›
               </button>
@@ -366,13 +371,13 @@ export function Stats() {
         </div>
         <div className="mt-5 grid grid-cols-2 gap-3">
           <div className="rounded-[24px] bg-white/10 p-4 backdrop-blur">
-            <p className="text-xs text-white/70">수입</p>
+            <p className="text-xs text-white/70">{messages.common.income}</p>
             <p className="mt-2 text-lg font-semibold">
               {formatCurrency(monthlyIncomeTotal)}
             </p>
           </div>
           <div className="rounded-[24px] bg-white/10 p-4 backdrop-blur">
-            <p className="text-xs text-white/70">남은 예산</p>
+            <p className="text-xs text-white/70">{messages.stats.remainingBudget}</p>
             <p className="mt-2 text-lg font-semibold">
               {formatCurrency(Math.max(budgetRemaining, 0))}
             </p>
@@ -383,9 +388,11 @@ export function Stats() {
       <section className="rounded-[28px] bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.08)]">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-sm font-semibold text-slate-500">예산 사용률</p>
+            <p className="text-sm font-semibold text-slate-500">
+              {messages.stats.budgetUsageRate}
+            </p>
             <p className="mt-1 text-xl font-bold text-slate-900">
-              {budget > 0 ? `${Math.round(budgetProgress)}%` : "예산 미설정"}
+              {budget > 0 ? `${Math.round(budgetProgress)}%` : messages.stats.budgetUnset}
             </p>
           </div>
           <div
@@ -395,7 +402,7 @@ export function Stats() {
                 : "bg-emerald-100 text-emerald-700"
             }`}
           >
-            {budgetExceeded ? "예산 초과" : "예산 내 사용 중"}
+            {budgetExceeded ? messages.stats.overBudget : messages.stats.withinBudget}
           </div>
         </div>
 
@@ -409,8 +416,8 @@ export function Stats() {
         </div>
 
         <div className="mt-3 flex items-center justify-between text-sm text-slate-400">
-          <span>월 예산 {formatCurrency(budget)}</span>
-          <span>사용 {formatCurrency(monthlyExpenseTotal)}</span>
+          <span>{messages.stats.monthlyBudget} {formatCurrency(budget)}</span>
+          <span>{messages.stats.used} {formatCurrency(monthlyExpenseTotal)}</span>
         </div>
       </section>
 
@@ -418,16 +425,15 @@ export function Stats() {
 
       <section className="rounded-[28px] bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.08)]">
         <div className="mb-4">
-          <h3 className="text-base font-bold text-slate-900">카테고리별 소비</h3>
+          <h3 className="text-base font-bold text-slate-900">{messages.stats.categorySpending}</h3>
           <p className="mt-1 text-sm text-slate-400">
-            선택한 달의 지출을 카테고리 기준으로 나눴도록 했어요. 항목을 누르면
-            상세 내역을 볼 수 있어요.
+            {messages.stats.categorySpendingDesc}
           </p>
         </div>
 
         {categoryBreakdown.length === 0 ? (
           <p className="rounded-[20px] bg-slate-50 px-4 py-10 text-center text-sm text-slate-400">
-            아직 이 달 지출 데이터가 없어요.
+            {messages.stats.noExpenseThisMonth}
           </p>
         ) : (
           <>
@@ -500,9 +506,9 @@ export function Stats() {
 
       <section className="rounded-[28px] bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.08)]">
         <div className="mb-4">
-          <h3 className="text-base font-bold text-slate-900">수입 vs 지출</h3>
+          <h3 className="text-base font-bold text-slate-900">{messages.stats.incomeVsExpense}</h3>
           <p className="mt-1 text-sm text-slate-400">
-            이번 달 흐름을 한 번에 볼 수 있어요.
+            {messages.stats.incomeVsExpenseDesc}
           </p>
         </div>
         <div
@@ -529,7 +535,7 @@ export function Stats() {
           onClick={() => setStatsView("yearly")}
           className="mt-4 w-full rounded-2xl py-3 text-center text-sm font-semibold text-indigo-600 transition hover:bg-indigo-50 active:scale-[0.99]"
         >
-          연간 흐름 보기
+          {messages.stats.viewYearlyFlow}
         </button>
       </section>
     </div>

@@ -1,4 +1,5 @@
 import type { Transaction } from "../types";
+import { useI18n } from "../i18n";
 import { TransactionItem } from "./TransactionItem";
 
 type TransactionListProps = {
@@ -19,14 +20,15 @@ export function TransactionList({
   onEdit,
   onDelete,
 }: TransactionListProps) {
+  const { localeTag, messages } = useI18n();
   if (transactions.length === 0) {
     return (
       <div className="rounded-[28px] bg-white p-8 text-center shadow-[0_10px_30px_rgba(15,23,42,0.08)]">
         <p className="text-base font-semibold text-slate-800">
-          아직 기록된 내역이 없어요
+          {messages.transaction.noHistoryTitle}
         </p>
         <p className="mt-2 text-sm text-slate-400">
-          하단의 + 버튼으로 첫 거래를 추가해보세요.
+          {messages.transaction.noHistoryDesc}
         </p>
       </div>
     );
@@ -42,13 +44,16 @@ export function TransactionList({
         <section key={date}>
           <div className="mb-3 flex items-center justify-between">
             <h3 className="text-sm font-semibold text-slate-500">
-              {new Date(date).toLocaleDateString("ko-KR", {
+              {new Date(date).toLocaleDateString(localeTag, {
                 month: "long",
                 day: "numeric",
                 weekday: "short",
               })}
             </h3>
-            <span className="text-xs text-slate-400">{items.length}건</span>
+            <span className="text-xs text-slate-400">
+              {items.length}
+              {messages.common.countSuffix}
+            </span>
           </div>
 
           <div className="space-y-3">

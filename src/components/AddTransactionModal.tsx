@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useI18n } from "../i18n";
 import type { RecurringTemplate, Transaction, TransactionType } from "../types";
 
 type AddTransactionModalProps = {
@@ -64,6 +65,7 @@ export function AddTransactionModal({
   onClose,
   onSubmit,
 }: AddTransactionModalProps) {
+  const { messages } = useI18n();
   const [form, setForm] = useState<FormState>(() =>
     createInitialState(categories, initialTransaction, prefillTemplate),
   );
@@ -77,8 +79,11 @@ export function AddTransactionModal({
   }, [categories, initialTransaction, open, prefillTemplate]);
 
   const title = useMemo(
-    () => (initialTransaction ? "거래 수정" : "새 거래 추가"),
-    [initialTransaction],
+    () =>
+      initialTransaction
+        ? messages.transaction.editTitle
+        : messages.transaction.addNewTitle,
+    [initialTransaction, messages.transaction],
   );
 
   if (!open) {
@@ -117,13 +122,13 @@ export function AddTransactionModal({
               type="button"
               onClick={onClose}
               className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-slate-100 text-lg font-light leading-none text-slate-500"
-              aria-label="닫기"
+              aria-label={messages.transaction.closeAria}
             >
               ×
             </button>
           </div>
           <p className="mt-1 text-sm text-slate-400">
-            3단계 안에 빠르게 입력할 수 있게 구성했어요.
+            {messages.transaction.quickInputDesc}
           </p>
         </div>
 
@@ -138,7 +143,7 @@ export function AddTransactionModal({
                   : "bg-slate-100 text-slate-500"
               }`}
             >
-              지출
+              {messages.common.expense}
             </button>
             <button
               type="button"
@@ -149,13 +154,13 @@ export function AddTransactionModal({
                   : "bg-slate-100 text-slate-500"
               }`}
             >
-              수입
+              {messages.common.income}
             </button>
           </div>
 
           <label className="block">
             <span className="mb-2 block text-sm font-semibold text-slate-700">
-              금액 (원)
+              {messages.transaction.amountWon}
             </span>
             <input
               type="number"
@@ -166,16 +171,18 @@ export function AddTransactionModal({
               onChange={(event) =>
                 setForm((prev) => ({ ...prev, amount: event.target.value }))
               }
-              placeholder="예: 12500"
+              placeholder={messages.transaction.amountPlaceholder}
               className="w-full rounded-[20px] border border-slate-200 bg-slate-50 px-4 py-4 text-lg font-semibold text-slate-900 outline-none ring-0 transition focus:border-slate-400"
             />
-            <p className="mt-2 text-xs text-slate-400">1원 단위까지 입력할 수 있어요.</p>
+            <p className="mt-2 text-xs text-slate-400">
+              {messages.transaction.amountHint}
+            </p>
           </label>
 
           <div className="grid grid-cols-2 gap-3">
             <label className="block">
               <span className="mb-2 block text-sm font-semibold text-slate-700">
-                카테고리
+                {messages.common.category}
               </span>
               <select
                 value={form.category}
@@ -194,7 +201,7 @@ export function AddTransactionModal({
 
             <label className="block">
               <span className="mb-2 block text-sm font-semibold text-slate-700">
-                날짜
+                {messages.common.date}
               </span>
               <input
                 type="date"
@@ -209,7 +216,7 @@ export function AddTransactionModal({
 
           <label className="block">
             <span className="mb-2 block text-sm font-semibold text-slate-700">
-              메모
+              {messages.common.memo}
             </span>
             <textarea
               value={form.memo}
@@ -217,7 +224,7 @@ export function AddTransactionModal({
                 setForm((prev) => ({ ...prev, memo: event.target.value }))
               }
               rows={3}
-              placeholder="기록을 남기고 싶다면 입력하세요"
+              placeholder={messages.transaction.memoPlaceholder}
               className="w-full resize-none rounded-[20px] border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-900 outline-none transition focus:border-slate-400"
             />
           </label>
@@ -226,7 +233,9 @@ export function AddTransactionModal({
             type="submit"
             className="w-full rounded-[22px] bg-slate-900 px-4 py-4 text-base font-semibold text-white shadow-[0_14px_24px_rgba(15,23,42,0.18)] transition active:scale-[0.99]"
           >
-            {initialTransaction ? "거래 저장" : "거래 추가"}
+            {initialTransaction
+              ? messages.transaction.saveTitle
+              : messages.transaction.addTitle}
           </button>
         </form>
       </div>
