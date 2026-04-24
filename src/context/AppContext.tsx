@@ -14,7 +14,11 @@ import type {
   RecurringTemplate,
 } from "../types";
 
-export const BUDGET_APP_STORAGE_KEY = "budget-app-state";
+export const BUDGET_APP_STORAGE_KEY_PREFIX = "budget-app-state";
+
+export function buildBudgetStorageKey(userId: string) {
+  return `${BUDGET_APP_STORAGE_KEY_PREFIX}:${userId}`;
+}
 
 /** 첫 설치·스토리지 없음 시 보여줄 샘플 포함 기본값 */
 const DEFAULT_STATE: AppState = {
@@ -129,9 +133,16 @@ function appReducer(state: AppState, action: AppAction): AppState {
 
 const AppContext = createContext<AppContextValue | null>(null);
 
-export function AppProvider({ children }: PropsWithChildren) {
+type AppProviderProps = PropsWithChildren<{
+  storageKey?: string;
+}>;
+
+export function AppProvider({
+  children,
+  storageKey = BUDGET_APP_STORAGE_KEY_PREFIX,
+}: AppProviderProps) {
   const [storedState, setStoredState] = useLocalStorage<AppState>(
-    BUDGET_APP_STORAGE_KEY,
+    storageKey,
     DEFAULT_STATE,
   );
   const [state, dispatch] = useReducer(appReducer, withRecurringTemplates(storedState));
@@ -163,7 +174,7 @@ export function AppProvider({ children }: PropsWithChildren) {
         dispatch({ type: "remove-category", payload: category }),
       resetAllData: () => {
         try {
-          window.localStorage.removeItem(BUDGET_APP_STORAGE_KEY);
+          window.localStorage.removeItem(storageKey);
         } catch {
           /* ignore */
         }
@@ -182,7 +193,7 @@ export function AppProvider({ children }: PropsWithChildren) {
         dispatch({ type: "remove-recurring-template", payload: id });
       },
     }),
-    [state],
+    [state, storageKey],
   );
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

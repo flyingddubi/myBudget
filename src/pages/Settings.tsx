@@ -1,7 +1,9 @@
 import { type ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import { HARDWARE_BACK_EVENT } from "../hardwareBack";
 import { InlineNativeAd } from "../components/InlineNativeAd";
+import { PrivacyPolicyContent } from "../components/PrivacyPolicyContent";
 import { useAppContext } from "../context/AppContext";
+import { useAuthContext } from "../context/AuthContext";
 import { useI18n } from "../i18n";
 import { backupToJsonString, parseBackupJson } from "../utils/backup";
 import { shareBackupJson } from "../utils/shareBackupJson";
@@ -108,7 +110,6 @@ function SubscreenHeader({
 
 function PrivacyPolicyScreen({ onBack }: { onBack: () => void }) {
   const { messages } = useI18n();
-  const privacy = messages.settings.privacy;
   return (
     <div className="space-y-5">
       <SubscreenHeader
@@ -118,66 +119,7 @@ function PrivacyPolicyScreen({ onBack }: { onBack: () => void }) {
       />
 
       <section className="rounded-[28px] bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.08)]">
-        <div className="space-y-5 text-[15px] leading-7 text-slate-700">
-          <div>
-            <h3 className="text-lg font-bold text-slate-900">{messages.settings.privacyTitle}</h3>
-            <p className="mt-3">{privacy.intro}</p>
-          </div>
-
-          {privacy.sections.map((section) => (
-            <div key={section.title}>
-              <h4 className="font-bold text-slate-900">{section.title}</h4>
-              <div className="mt-2 space-y-2">
-                {section.body.map((paragraph) => (
-                  <p key={paragraph}>{paragraph}</p>
-                ))}
-                {"bullets" in section && section.bullets ? (
-                  <ul className="list-disc space-y-1 pl-5 text-slate-700">
-                    {section.bullets.map((bullet: string) => (
-                      <li key={bullet}>{bullet}</li>
-                    ))}
-                  </ul>
-                ) : null}
-                {section.title === "2. 제3자 서비스 사용" ? (
-                  <p>
-                    {privacy.detailLink}
-                    <br />
-                    <a
-                      href="https://policies.google.com/privacy"
-                      target="_blank"
-                      rel="noreferrer"
-                      className="font-semibold text-indigo-600 underline underline-offset-2"
-                    >
-                      https://policies.google.com/privacy
-                    </a>
-                  </p>
-                ) : null}
-              </div>
-            </div>
-          ))}
-
-          <div>
-            <h4 className="font-bold text-slate-900">{privacy.inquiryTitle}</h4>
-            <div className="mt-2 space-y-2">
-              <p>{privacy.inquiryBody}</p>
-              <p>{privacy.developer}</p>
-              <p>
-                {privacy.emailLabel}{" "}
-                <a
-                  href="mailto:flyingcompany.ko.tw@gmail.com"
-                  className="font-semibold text-indigo-600 underline underline-offset-2"
-                >
-                  flyingcompany.ko.tw@gmail.com
-                </a>
-              </p>
-            </div>
-          </div>
-
-          <div className="rounded-[20px] bg-slate-50 px-4 py-4">
-            <p className="text-sm font-semibold text-slate-500">{privacy.lastUpdated}</p>
-            <p className="mt-1 font-bold text-slate-900">{privacy.lastUpdatedValue}</p>
-          </div>
-        </div>
+        <PrivacyPolicyContent />
       </section>
     </div>
   );
@@ -321,6 +263,7 @@ export function Settings({
   onBackToMain,
 }: SettingsProps) {
   const { messages } = useI18n();
+  const { user, signOut } = useAuthContext();
   const {
     state,
     state: { budget, categories, transactions },
@@ -335,6 +278,7 @@ export function Settings({
   const [draftCategory, setDraftCategory] = useState("");
   const [recurringScreenOpen, setRecurringScreenOpen] = useState(false);
   const [backupDialog, setBackupDialog] = useState<BackupDialogType | null>(null);
+  const [loggingOut, setLoggingOut] = useState(false);
 
   useEffect(() => {
     setDraftBudget(String(budget));
@@ -439,6 +383,17 @@ export function Settings({
     window.alert(messages.settings.importCompleted);
   };
 
+  const handleLogout = async () => {
+    setLoggingOut(true);
+    try {
+      await signOut();
+    } catch {
+      window.alert(messages.settings.logoutError);
+    } finally {
+      setLoggingOut(false);
+    }
+  };
+
   if (view === "privacy") {
     return <PrivacyPolicyScreen onBack={onBackToMain} />;
   }
@@ -510,6 +465,41 @@ export function Settings({
         </div>
       )}
       <div className="space-y-5">
+        <section className="rounded-[28px] bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.08)]">
+          <div>
+            <h3 className="text-base font-bold text-slate-900">{messages.settings.accountTitle}</h3>
+            <p className="mt-1 text-sm text-slate-400">{messages.settings.accountDesc}</p>
+          </div>
+
+          <div className="mt-4 space-y-3 rounded-[24px] bg-slate-50 p-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                {messages.settings.accountEmail}
+              </p>
+              <p className="mt-1 text-sm font-semibold text-slate-900">
+                {user?.email ?? "-"}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                {messages.settings.accountName}
+              </p>
+              <p className="mt-1 text-sm font-semibold text-slate-900">
+                {user?.displayName ?? "-"}
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => void handleLogout()}
+            disabled={loggingOut}
+            className="mt-4 w-full rounded-[20px] border border-slate-200 bg-white px-4 py-4 text-sm font-bold text-slate-800 shadow-sm transition active:scale-[0.99] disabled:opacity-60"
+          >
+            {loggingOut ? messages.settings.loggingOut : messages.settings.logout}
+          </button>
+        </section>
+
         <section className="rounded-[28px] bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.08)]">
           <div>
             <div className="flex items-center justify-between gap-3">
