@@ -8,8 +8,10 @@ import {
 } from "react";
 import {
   createUserWithEmailAndPassword,
+  GoogleAuthProvider,
   onAuthStateChanged,
   signInWithEmailAndPassword,
+  signInWithRedirect,
   signOut as firebaseSignOut,
   updateProfile,
   type User,
@@ -28,10 +30,16 @@ type AuthContextValue = {
   loading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (params: SignUpParams) => Promise<void>;
+  signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
+const googleProvider = new GoogleAuthProvider();
+
+googleProvider.setCustomParameters({
+  prompt: "select_account",
+});
 
 async function ensureUserProfileDocument(user: User) {
   const userRef = doc(db, "users", user.uid);
@@ -86,6 +94,9 @@ export function AuthProvider({ children }: PropsWithChildren) {
           name: trimmedName,
           createdAt: serverTimestamp(),
         });
+      },
+      signInWithGoogle: async () => {
+        await signInWithRedirect(auth, googleProvider);
       },
       signOut: async () => {
         await firebaseSignOut(auth);

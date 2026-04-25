@@ -8,6 +8,7 @@ import { useEffect, useRef, useState } from "react";
 export function useLocalStorage<T>(key: string, initialValue: T) {
   const parseFailedRef = useRef(false);
   const initialSnapshotRef = useRef(initialValue);
+  const keyRef = useRef(key);
 
   const [storedValue, setStoredValue] = useState<T>(() => {
     if (typeof window === "undefined") {
@@ -29,6 +30,10 @@ export function useLocalStorage<T>(key: string, initialValue: T) {
 
   useEffect(() => {
     if (typeof window === "undefined") {
+      return;
+    }
+
+    if (keyRef.current !== key) {
       return;
     }
 
@@ -54,6 +59,29 @@ export function useLocalStorage<T>(key: string, initialValue: T) {
       console.error("localStorage write error", error);
     }
   }, [key, storedValue]);
+
+  useEffect(() => {
+    if (typeof window === "undefined" || keyRef.current === key) {
+      return;
+    }
+
+    keyRef.current = key;
+
+    try {
+      const item = window.localStorage.getItem(key);
+      if (item === null) {
+        setStoredValue(initialValue);
+        return;
+      }
+
+      setStoredValue(JSON.parse(item) as T);
+      parseFailedRef.current = false;
+    } catch (error) {
+      console.error("localStorage read error", error);
+      parseFailedRef.current = true;
+      setStoredValue(initialValue);
+    }
+  }, [initialValue, key]);
 
   return [storedValue, setStoredValue] as const;
 }

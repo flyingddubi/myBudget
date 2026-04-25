@@ -26,31 +26,19 @@ export type AppState = {
   recurringTemplates: RecurringTemplate[];
 };
 
-export type AppAction =
-  | { type: "add-transaction"; payload: Transaction }
-  | { type: "update-transaction"; payload: Transaction }
-  | { type: "delete-transaction"; payload: string }
-  | { type: "set-budget"; payload: number }
-  | { type: "add-category"; payload: string }
-  | { type: "remove-category"; payload: string }
-  | { type: "reset"; payload: AppState }
-  | { type: "add-recurring-template"; payload: RecurringTemplate }
-  | { type: "update-recurring-template"; payload: RecurringTemplate }
-  | { type: "remove-recurring-template"; payload: string };
-
 export type AppContextValue = {
   state: AppState;
-  addTransaction: (transaction: Transaction) => void;
-  updateTransaction: (transaction: Transaction) => void;
-  deleteTransaction: (transactionId: string) => void;
-  setBudget: (budget: number) => void;
-  addCategory: (category: string) => boolean;
-  removeCategory: (category: string) => void;
-  resetAllData: () => void;
-  importBackup: (next: AppState) => void;
-  addRecurringTemplate: (template: RecurringTemplate) => void;
-  updateRecurringTemplate: (template: RecurringTemplate) => void;
-  removeRecurringTemplate: (id: string) => void;
+  addTransaction: (transaction: Transaction) => Promise<void>;
+  updateTransaction: (transaction: Transaction) => Promise<void>;
+  deleteTransaction: (transactionId: string) => Promise<void>;
+  setBudget: (budget: number) => Promise<void>;
+  addCategory: (category: string) => Promise<boolean>;
+  removeCategory: (category: string) => Promise<void>;
+  resetAllData: () => Promise<void>;
+  importBackup: (next: AppState) => Promise<void>;
+  addRecurringTemplate: (template: RecurringTemplate) => Promise<void>;
+  updateRecurringTemplate: (template: RecurringTemplate) => Promise<void>;
+  removeRecurringTemplate: (id: string) => Promise<void>;
 };
 
 export type PageKey = "home" | "stats" | "settings";

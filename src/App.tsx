@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import { AddTransactionModal } from "./components/AddTransactionModal";
 import { BottomNav } from "./components/BottomNav";
 import { useAppContext } from "./context/AppContext";
+import { useNoticeCenter } from "./hooks/useNoticeCenter";
 import { HARDWARE_BACK_EVENT } from "./hardwareBack";
 import { useI18n } from "./i18n";
 import { Home } from "./pages/Home";
@@ -88,6 +89,7 @@ export default function App() {
     addTransaction,
     updateTransaction,
   } = useAppContext();
+  const { unreadCount, popupNotice, markNoticeAsRead, dismissPopupNotice } = useNoticeCenter();
   const [currentPage, setCurrentPage] = useState<PageKey>("home");
   const [modalOpen, setModalOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(
@@ -220,6 +222,10 @@ export default function App() {
       return messages.app.pageMeta.guide;
     }
 
+    if (settingsView === "notices") {
+      return messages.app.pageMeta.notices;
+    }
+
     return messages.app.pageMeta.settings;
   }, [currentPage, messages.app.pageMeta, settingsView]);
 
@@ -294,6 +300,9 @@ export default function App() {
 
   const showSettingsMenuButton =
     currentPage === "settings" && settingsView === "main";
+  const showPopupNotice =
+    popupNotice !== null && !(currentPage === "settings" && settingsView === "notices");
+  const unreadNoticeBadge = unreadCount > 99 ? "99+" : String(unreadCount);
   const currentDateLabel = formatDate(new Date(), {
     month: "long",
     day: "numeric",
@@ -327,7 +336,7 @@ export default function App() {
                   ref={settingsMenuButtonRef}
                   type="button"
                   onClick={() => setSettingsMenuOpen((prev) => !prev)}
-                  className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-white/90 text-slate-700 shadow-sm ring-1 ring-slate-200/80 transition active:scale-[0.97]"
+                  className="relative grid h-11 w-11 shrink-0 place-items-center rounded-full bg-white/90 text-slate-700 shadow-sm ring-1 ring-slate-200/80 transition active:scale-[0.97]"
                   aria-label={
                     settingsMenuOpen
                       ? messages.app.settingsMenu.close
@@ -347,6 +356,11 @@ export default function App() {
                     <path d="M4 12h16" />
                     <path d="M4 17h16" />
                   </svg>
+                  {unreadCount > 0 ? (
+                    <span className="absolute -right-1 -top-1 min-w-5 rounded-full bg-rose-500 px-1.5 py-0.5 text-[10px] font-bold leading-none text-white shadow-sm">
+                      {unreadNoticeBadge}
+                    </span>
+                  ) : null}
                 </button>
               ) : null}
             </div>
@@ -356,6 +370,26 @@ export default function App() {
                 className="absolute right-0 top-[calc(100%+0.75rem)] z-20 w-[220px] rounded-[28px] bg-white p-3 shadow-[0_20px_40px_rgba(15,23,42,0.18)] ring-1 ring-slate-200/80"
               >
                 <div className="space-y-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSettingsMenuOpen(false);
+                      setSettingsView("notices");
+                    }}
+                    className="flex w-full items-center justify-between rounded-[20px] bg-slate-50 px-4 py-4 text-left text-sm font-semibold text-slate-800 transition active:scale-[0.99]"
+                  >
+                    <span>{messages.app.settingsMenu.notices}</span>
+                    <div className="flex items-center gap-2">
+                      {unreadCount > 0 ? (
+                        <span className="rounded-full bg-rose-500 px-2 py-1 text-[11px] font-bold leading-none text-white">
+                          {unreadNoticeBadge}
+                        </span>
+                      ) : null}
+                      <span className="text-slate-300" aria-hidden>
+                        ›
+                      </span>
+                    </div>
+                  </button>
                   <button
                     type="button"
                     onClick={() => {
@@ -542,6 +576,69 @@ export default function App() {
           {messages.app.exitToast}
         </div>
       )}
+
+      {showPopupNotice ? (
+        <div
+          className="fixed inset-0 z-[190] flex items-end justify-center bg-slate-950/45 px-4 pb-[calc(2rem+var(--sab))] pt-10"
+          role="presentation"
+          onClick={() => dismissPopupNotice(popupNotice.id)}
+        >
+          <div
+            className="w-full max-w-[420px] rounded-[28px] bg-white p-5 shadow-[0_20px_60px_rgba(15,23,42,0.3)]"
+            role="dialog"
+            aria-modal="true"
+            aria-label={messages.settings.noticePopupTitle}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="space-y-4">
+              <div className="flex items-center gap-2">
+                <span className="rounded-full bg-indigo-100 px-3 py-1.5 text-xs font-bold text-indigo-600">
+                  {messages.settings.noticePopupBadge}
+                </span>
+                {popupNotice.isPinned ? (
+                  <span className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-bold text-slate-600">
+                    {messages.settings.noticePinned}
+                  </span>
+                ) : null}
+              </div>
+
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                  {popupNotice.publishedAt
+                    ? formatDate(popupNotice.publishedAt, {
+                        year: "numeric",
+                        month: "long",
+                        day: "numeric",
+                      })
+                    : messages.settings.noticeDateUnknown}
+                </p>
+                <h2 className="mt-2 text-xl font-bold text-slate-900">{popupNotice.title}</h2>
+              </div>
+
+              <div className="rounded-[22px] bg-slate-50 px-4 py-5 text-sm leading-7 text-slate-700 whitespace-pre-wrap">
+                {popupNotice.content}
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => dismissPopupNotice(popupNotice.id)}
+                  className="rounded-[20px] border border-slate-200 bg-white px-4 py-4 text-sm font-bold text-slate-700 shadow-sm transition active:scale-[0.99]"
+                >
+                  {messages.settings.noticePopupLater}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void markNoticeAsRead(popupNotice.id)}
+                  className="rounded-[20px] bg-slate-900 px-4 py-4 text-sm font-bold text-white shadow-sm transition active:scale-[0.99]"
+                >
+                  {messages.settings.noticePopupConfirm}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </>
   );
 }

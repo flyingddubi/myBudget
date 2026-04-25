@@ -1,10 +1,12 @@
 import {
   useCallback,
+  useEffect,
   useMemo,
   useRef,
   useState,
   type FocusEvent,
 } from "react";
+import { doc, onSnapshot } from "firebase/firestore";
 import {
   Bar,
   BarChart,
@@ -19,12 +21,14 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { useAppContext } from "../context/AppContext";
+import { useAppContext, useLedgerId } from "../context/AppContext";
+import { db } from "../firebase";
 import { useI18n } from "../i18n";
 import { StatsBannerAd } from "../components/StatsBannerAd";
 import { calculateStats } from "../utils/calculateStats";
 import { formatCurrency } from "../utils/formatCurrency";
 import { isYmdInMonth } from "../utils/aggregateByDate";
+import { MONTHLY_BUDGET_COLLECTION, formatBudgetMonthKey } from "../utils/monthlyBudget";
 import { buildLast12MonthsFlow } from "../utils/yearlyFlow";
 import type { Transaction } from "../types";
 
@@ -246,6 +250,7 @@ export function Stats() {
   const [statsView, setStatsView] = useState<"main" | "yearly">("main");
   const [detailCategory, setDetailCategory] = useState<string | null>(null);
   const [viewMonth, setViewMonth] = useState(() => startOfMonth(new Date()));
+  const [monthlyBudget, setMonthlyBudget] = useState(0);
   const categoryPieWrapRef = useRef<HTMLDivElement>(null);
 
   /** Recharts 파이 조각 포커스 시 스크롤 보정으로 하단 고정 탭이 튀는 현상 방지 */
@@ -269,8 +274,38 @@ export function Stats() {
   );
 
   const {
-    state: { transactions, budget },
+    state: { transactions },
   } = useAppContext();
+  const ledgerId = useLedgerId();
+
+  useEffect(() => {
+    if (!ledgerId) {
+      setMonthlyBudget(0);
+      return;
+    }
+
+    const budgetRef = doc(
+      db,
+      "ledgers",
+      ledgerId,
+      MONTHLY_BUDGET_COLLECTION,
+      formatBudgetMonthKey(viewMonth),
+    );
+
+    const unsubscribe = onSnapshot(
+      budgetRef,
+      (snapshot) => {
+        const raw = snapshot.data()?.amount;
+        const nextBudget = Number(raw ?? 0);
+        setMonthlyBudget(Number.isFinite(nextBudget) ? Math.max(0, Math.round(nextBudget)) : 0);
+      },
+      (error) => {
+        console.warn("Failed to subscribe stats monthly budget", error);
+      },
+    );
+
+    return unsubscribe;
+  }, [ledgerId, viewMonth]);
 
   const isViewingCurrentMonth = useMemo(() => {
     const n = new Date();
@@ -287,8 +322,8 @@ export function Stats() {
     budgetProgress,
     budgetRemaining,
   } = useMemo(
-    () => calculateStats(transactions, budget, viewMonth),
-    [transactions, budget, viewMonth],
+    () => calculateStats(transactions, monthlyBudget, viewMonth),
+    [monthlyBudget, transactions, viewMonth],
   );
 
   const expenseHeading = isViewingCurrentMonth
@@ -311,7 +346,7 @@ export function Stats() {
   }, []);
 
   const normalizedProgress = Math.min(Math.max(budgetProgress, 0), 100);
-  const budgetExceeded = budget > 0 && monthlyExpenseTotal > budget;
+  const budgetExceeded = monthlyBudget > 0 && monthlyExpenseTotal > monthlyBudget;
 
   const compareData = [
     { name: messages.common.income, amount: monthlyIncomeTotal },
@@ -392,7 +427,7 @@ export function Stats() {
               {messages.stats.budgetUsageRate}
             </p>
             <p className="mt-1 text-xl font-bold text-slate-900">
-              {budget > 0 ? `${Math.round(budgetProgress)}%` : messages.stats.budgetUnset}
+              {monthlyBudget > 0 ? `${Math.round(budgetProgress)}%` : messages.stats.budgetUnset}
             </p>
           </div>
           <div
@@ -416,7 +451,7 @@ export function Stats() {
         </div>
 
         <div className="mt-3 flex items-center justify-between text-sm text-slate-400">
-          <span>{messages.stats.monthlyBudget} {formatCurrency(budget)}</span>
+          <span>{messages.stats.monthlyBudget} {formatCurrency(monthlyBudget)}</span>
           <span>{messages.stats.used} {formatCurrency(monthlyExpenseTotal)}</span>
         </div>
       </section>
