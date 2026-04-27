@@ -1,4 +1,4 @@
-package com.doyoun.mybudget;
+package com.flyingcompany.mybudget;
 
 import android.os.Bundle;
 import androidx.core.view.WindowCompat;

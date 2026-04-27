@@ -11,11 +11,14 @@ import {
   GoogleAuthProvider,
   onAuthStateChanged,
   signInWithEmailAndPassword,
+  signInWithCredential,
   signInWithRedirect,
   signOut as firebaseSignOut,
   updateProfile,
   type User,
 } from "firebase/auth";
+import { Capacitor } from "@capacitor/core";
+import { FirebaseAuthentication } from "@capacitor-firebase/authentication";
 import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
 import { auth, db } from "../firebase";
 
@@ -53,6 +56,18 @@ async function ensureUserProfileDocument(user: User) {
     name: user.displayName ?? "",
     createdAt: serverTimestamp(),
   });
+}
+
+async function signInWithGoogleOnNative() {
+  const result = await FirebaseAuthentication.signInWithGoogle();
+  const idToken = result.credential?.idToken;
+
+  if (!idToken) {
+    throw new Error("Google sign-in did not return an idToken.");
+  }
+
+  const credential = GoogleAuthProvider.credential(idToken);
+  await signInWithCredential(auth, credential);
 }
 
 export function AuthProvider({ children }: PropsWithChildren) {
@@ -96,6 +111,11 @@ export function AuthProvider({ children }: PropsWithChildren) {
         });
       },
       signInWithGoogle: async () => {
+        if (Capacitor.isNativePlatform()) {
+          await signInWithGoogleOnNative();
+          return;
+        }
+
         await signInWithRedirect(auth, googleProvider);
       },
       signOut: async () => {
