@@ -1,19 +1,24 @@
 import { App as CapacitorApp } from "@capacitor/app";
 import { Capacitor } from "@capacitor/core";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { AddTransactionModal } from "./components/AddTransactionModal";
 import { BottomNav } from "./components/BottomNav";
+import { InlineNativeAd } from "./components/InlineNativeAd";
 import { useAppContext } from "./context/AppContext";
+import { useAuthContext } from "./context/AuthContext";
 import { useNoticeCenter } from "./hooks/useNoticeCenter";
 import { HARDWARE_BACK_EVENT } from "./hardwareBack";
-import { useI18n } from "./i18n";
+import { APP_LOCALE_OPTIONS, type AppLocale, useI18n } from "./i18n";
 import { Home } from "./pages/Home";
 import { Settings, type SettingsView } from "./pages/Settings";
-import { Stats } from "./pages/Stats";
 import type { PageKey, RecurringTemplate, Transaction } from "./types";
 
 const EXIT_CONFIRM_MS = 2000;
+const Stats = lazy(async () => {
+  const module = await import("./pages/Stats");
+  return { default: module.Stats };
+});
 
 type FabOverlay = "none" | "choose" | "recurring";
 
@@ -84,12 +89,14 @@ function FloatingAddCluster({
 
 export default function App() {
   const { locale, setLocale, messages, formatDate } = useI18n();
+  const { user, signOut } = useAuthContext();
   const {
     state: { categories, recurringTemplates },
     addTransaction,
     updateTransaction,
   } = useAppContext();
-  const { unreadCount, popupNotice, markNoticeAsRead, dismissPopupNotice } = useNoticeCenter();
+  const { notices, unreadCount, popupNotice, readNoticeIdSet, markNoticeAsRead, dismissPopupNotice } =
+    useNoticeCenter();
   const [currentPage, setCurrentPage] = useState<PageKey>("home");
   const [modalOpen, setModalOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(
@@ -102,6 +109,8 @@ export default function App() {
     null,
   );
   const [exitToast, setExitToast] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
+  const [logoutDialogOpen, setLogoutDialogOpen] = useState(false);
 
   const lastBackPressRef = useRef(0);
   const settingsMenuRef = useRef<HTMLDivElement | null>(null);
@@ -109,10 +118,12 @@ export default function App() {
   const backStateRef = useRef({
     modalOpen: false,
     fabOverlay: "none" as FabOverlay,
+    logoutDialogOpen: false,
   });
 
   backStateRef.current.modalOpen = modalOpen;
   backStateRef.current.fabOverlay = fabOverlay;
+  backStateRef.current.logoutDialogOpen = logoutDialogOpen;
 
   useEffect(() => {
     if (currentPage !== "home") {
@@ -124,6 +135,7 @@ export default function App() {
     if (currentPage !== "settings") {
       setSettingsMenuOpen(false);
       setSettingsView("main");
+      setLogoutDialogOpen(false);
     }
   }, [currentPage]);
 
@@ -168,7 +180,7 @@ export default function App() {
         return;
       }
 
-      const { modalOpen: open, fabOverlay: fab } = backStateRef.current;
+      const { modalOpen: open, fabOverlay: fab, logoutDialogOpen: logoutOpen } = backStateRef.current;
 
       if (open) {
         setModalOpen(false);
@@ -179,6 +191,11 @@ export default function App() {
 
       if (fab === "recurring" || fab === "choose") {
         setFabOverlay("none");
+        return;
+      }
+
+      if (logoutOpen) {
+        setLogoutDialogOpen(false);
         return;
       }
 
@@ -283,7 +300,17 @@ export default function App() {
       case "home":
         return <Home onEditTransaction={handleEditTransaction} />;
       case "stats":
-        return <Stats />;
+        return (
+          <Suspense
+            fallback={
+              <section className="rounded-[28px] bg-white px-5 py-12 text-center shadow-[0_10px_30px_rgba(15,23,42,0.08)]">
+                <p className="text-sm font-medium text-slate-400">{messages.loading.loading}</p>
+              </section>
+            }
+          >
+            <Stats />
+          </Suspense>
+        );
       case "settings":
         return (
           <Settings
@@ -291,6 +318,7 @@ export default function App() {
             menuOpen={settingsMenuOpen}
             onCloseMenu={() => setSettingsMenuOpen(false)}
             onBackToMain={() => setSettingsView("main")}
+            noticeCenter={{ notices, readNoticeIdSet, markNoticeAsRead }}
           />
         );
       default:
@@ -308,6 +336,18 @@ export default function App() {
     day: "numeric",
     weekday: "long",
   });
+  const handleLogout = async () => {
+    setLoggingOut(true);
+    try {
+      await signOut();
+      setLogoutDialogOpen(false);
+      setSettingsMenuOpen(false);
+    } catch {
+      window.alert(messages.settings.logoutError);
+    } finally {
+      setLoggingOut(false);
+    }
+  };
 
   return (
     <>
@@ -424,36 +464,33 @@ export default function App() {
                       {messages.app.settingsMenu.versionLine}
                     </p>
                   </div>
-                  <div className="grid grid-cols-2 gap-2 rounded-[20px] bg-slate-50 p-2">
-                    <button
-                      type="button"
-                      onClick={() => setLocale("ko")}
-                      className={`rounded-[16px] px-3 py-3 text-left transition ${
-                        locale === "ko"
-                          ? "bg-white shadow-sm ring-1 ring-slate-200"
-                          : "bg-transparent"
-                      }`}
+                  <label className="flex items-center gap-2 rounded-[20px] bg-slate-50 px-4 py-3 text-sm font-semibold text-slate-600">
+                    <span className="text-base leading-none" aria-hidden="true">
+                      🌐
+                    </span>
+                    <select
+                      value={locale}
+                      onChange={(event) => setLocale(event.target.value as AppLocale)}
+                      className="min-w-0 flex-1 rounded-[14px] border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-900 outline-none transition focus:border-indigo-400"
+                      aria-label="Language"
                     >
-                      <p className="text-lg leading-none">🇰🇷</p>
-                      <p className="mt-1 text-xs font-semibold text-slate-700">
-                        {messages.app.settingsMenu.languageKo}
-                      </p>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setLocale("zh-TW")}
-                      className={`rounded-[16px] px-3 py-3 text-left transition ${
-                        locale === "zh-TW"
-                          ? "bg-white shadow-sm ring-1 ring-slate-200"
-                          : "bg-transparent"
-                      }`}
-                    >
-                      <p className="text-lg leading-none">🇹🇼</p>
-                      <p className="mt-1 text-xs font-semibold text-slate-700">
-                        {messages.app.settingsMenu.languageZhTw}
-                      </p>
-                    </button>
-                  </div>
+                      {APP_LOCALE_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSettingsMenuOpen(false);
+                      setLogoutDialogOpen(true);
+                    }}
+                    className="flex w-full items-center justify-center rounded-[20px] border border-rose-200 bg-rose-50 px-4 py-4 text-sm font-bold text-rose-600 shadow-sm transition active:scale-[0.99] disabled:opacity-60"
+                  >
+                    {messages.settings.logout}
+                  </button>
                 </div>
               </div>
             ) : null}
@@ -566,6 +603,70 @@ export default function App() {
         }}
         onSubmit={handleSubmitTransaction}
       />
+
+      {logoutDialogOpen ? (
+        <div
+          className="fixed inset-0 z-[180] flex items-end justify-center bg-slate-950/45 px-4 pb-[calc(2rem+var(--sab))] pt-10"
+          role="presentation"
+          onClick={() => {
+            if (!loggingOut) {
+              setLogoutDialogOpen(false);
+            }
+          }}
+        >
+          <div
+            className="w-full max-w-[420px] rounded-[28px] bg-white p-5 shadow-[0_20px_60px_rgba(15,23,42,0.3)]"
+            role="dialog"
+            aria-modal="true"
+            aria-label={messages.settings.logout}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="space-y-4">
+              <InlineNativeAd
+                alwaysVisible
+                minHeight={108}
+                className="rounded-[24px]"
+                placeholderText="App(Android/iOS) will show an AdMob native ad here."
+              />
+              <div className="rounded-[24px] bg-slate-50 px-4 py-4 text-left">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
+                  {messages.settings.accountEmail}
+                </p>
+                <p className="mt-1 break-all text-sm font-semibold text-slate-900">
+                  {user?.email ?? "-"}
+                </p>
+                <p className="mt-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                  {messages.settings.accountName}
+                </p>
+                <p className="mt-1 break-all text-sm font-semibold text-slate-900">
+                  {user?.displayName ?? "-"}
+                </p>
+              </div>
+              <p className="text-sm leading-6 text-slate-600">
+                {messages.settings.logoutDialogQuestion}
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => setLogoutDialogOpen(false)}
+                  disabled={loggingOut}
+                  className="rounded-[20px] border border-slate-200 bg-white px-4 py-4 text-sm font-bold text-slate-700 shadow-sm transition active:scale-[0.99] disabled:opacity-60"
+                >
+                  {messages.common.cancel}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleLogout()}
+                  disabled={loggingOut}
+                  className="rounded-[20px] bg-rose-500 px-4 py-4 text-sm font-bold text-white shadow-sm transition active:scale-[0.99] disabled:opacity-60"
+                >
+                  {loggingOut ? messages.settings.loggingOut : messages.common.confirm}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {exitToast && (
         <div

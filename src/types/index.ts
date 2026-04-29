@@ -7,6 +7,7 @@ export type Transaction = {
   category: string;
   memo?: string;
   date: string;
+  createdAtMs: number;
 };
 
 /** 거래 추가 시 불러올 반복 프리셋 (설정에서 관리) */
@@ -34,8 +35,6 @@ export type AppContextValue = {
   setBudget: (budget: number) => Promise<void>;
   addCategory: (category: string) => Promise<boolean>;
   removeCategory: (category: string) => Promise<void>;
-  resetAllData: () => Promise<void>;
-  importBackup: (next: AppState) => Promise<void>;
   addRecurringTemplate: (template: RecurringTemplate) => Promise<void>;
   updateRecurringTemplate: (template: RecurringTemplate) => Promise<void>;
   removeRecurringTemplate: (id: string) => Promise<void>;

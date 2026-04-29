@@ -23,6 +23,7 @@ export function RecurringManageScreen({ onClose }: RecurringManageScreenProps) {
   const [recurringAmount, setRecurringAmount] = useState("");
   const [recurringCategory, setRecurringCategory] = useState("");
   const [recurringMemo, setRecurringMemo] = useState("");
+  const [savedListOpen, setSavedListOpen] = useState(false);
 
   useEffect(() => {
     if (!recurringCategory && categories.length > 0) {
@@ -223,85 +224,94 @@ export function RecurringManageScreen({ onClose }: RecurringManageScreenProps) {
 
           {recurringTemplates.length > 0 && (
             <section className="mb-[calc(2rem+var(--bottom-overlay-pad))] rounded-[28px] bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.08)]">
-              <h2 className="text-base font-bold text-slate-900">
-                {messages.recurring.savedItems}
-              </h2>
-              <ul className="mt-4 space-y-2">
-                {recurringTemplates.map((tpl) => {
-                  const memo = tpl.memo?.trim();
-                  return (
-                  <li
-                    key={tpl.id}
-                    className="rounded-[20px] bg-slate-50 px-4 py-3"
-                  >
-                    <div className="flex items-baseline justify-between gap-3">
-                      <p
-                        className="min-w-0 truncate font-semibold text-slate-900"
-                        title={tpl.name}
-                      >
-                        {tpl.name}
-                      </p>
-                      <p
-                        className="max-w-[45%] shrink-0 truncate text-sm font-medium text-slate-600"
-                        title={tpl.category}
-                      >
-                        {tpl.category}
-                      </p>
-                    </div>
-                    <div className="mt-2 flex items-center justify-between gap-2">
-                      <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
-                        <span
-                          className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${
-                            tpl.type === "expense"
-                              ? "bg-rose-100 text-rose-600"
-                              : "bg-emerald-100 text-emerald-700"
-                          }`}
+              <div className="flex items-center justify-between gap-3">
+                <h2 className="text-base font-bold text-slate-900">{messages.recurring.savedItems}</h2>
+                <button
+                  type="button"
+                  onClick={() => setSavedListOpen((prev) => !prev)}
+                  className="text-xs font-semibold text-slate-500 transition hover:text-slate-700"
+                >
+                  {messages.recurring.toggleSavedItems} {savedListOpen ? "v" : ">"}
+                </button>
+              </div>
+              {savedListOpen ? (
+                <ul className="mt-4 space-y-2">
+                  {recurringTemplates.map((tpl) => {
+                    const memo = tpl.memo?.trim();
+                    return (
+                    <li
+                      key={tpl.id}
+                      className="rounded-[20px] bg-slate-50 px-4 py-3"
+                    >
+                      <div className="flex items-baseline justify-between gap-3">
+                        <p
+                          className="min-w-0 truncate font-semibold text-slate-900"
+                          title={tpl.name}
                         >
-                          {tpl.type === "expense"
-                            ? messages.common.expense
-                            : messages.common.income}
-                        </span>
-                        <span className="shrink-0 text-sm font-bold text-slate-800">
-                          {formatCurrency(tpl.amount)}
-                        </span>
-                        {memo ? (
+                          {tpl.name}
+                        </p>
+                        <p
+                          className="max-w-[45%] shrink-0 truncate text-sm font-medium text-slate-600"
+                          title={tpl.category}
+                        >
+                          {tpl.category}
+                        </p>
+                      </div>
+                      <div className="mt-2 flex items-center justify-between gap-2">
+                        <div className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
                           <span
-                            className="min-w-0 truncate text-xs text-slate-500"
-                            title={memo}
+                            className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                              tpl.type === "expense"
+                                ? "bg-rose-100 text-rose-600"
+                                : "bg-emerald-100 text-emerald-700"
+                            }`}
                           >
-                            {memo}
+                            {tpl.type === "expense"
+                              ? messages.common.expense
+                              : messages.common.income}
                           </span>
-                        ) : null}
+                          <span className="shrink-0 text-sm font-bold text-slate-800">
+                            {formatCurrency(tpl.amount)}
+                          </span>
+                          {memo ? (
+                            <span
+                              className="min-w-0 truncate text-xs text-slate-500"
+                              title={memo}
+                            >
+                              {memo}
+                            </span>
+                          ) : null}
+                        </div>
+                        <div className="flex shrink-0 items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => loadTemplateForEdit(tpl)}
+                            className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-indigo-600 shadow-sm"
+                          >
+                            {messages.common.edit}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (!window.confirm(messages.recurring.deleteConfirm)) {
+                                return;
+                              }
+                              if (editingId === tpl.id) {
+                                resetFormForNew();
+                              }
+                              removeRecurringTemplate(tpl.id);
+                            }}
+                            className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-rose-500 shadow-sm"
+                          >
+                            {messages.common.delete}
+                          </button>
+                        </div>
                       </div>
-                      <div className="flex shrink-0 items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => loadTemplateForEdit(tpl)}
-                          className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-indigo-600 shadow-sm"
-                        >
-                          {messages.common.edit}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (!window.confirm(messages.recurring.deleteConfirm)) {
-                              return;
-                            }
-                            if (editingId === tpl.id) {
-                              resetFormForNew();
-                            }
-                            removeRecurringTemplate(tpl.id);
-                          }}
-                          className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-rose-500 shadow-sm"
-                        >
-                          {messages.common.delete}
-                        </button>
-                      </div>
-                    </div>
-                  </li>
-                  );
-                })}
-              </ul>
+                    </li>
+                    );
+                  })}
+                </ul>
+              ) : null}
             </section>
           )}
         </div>

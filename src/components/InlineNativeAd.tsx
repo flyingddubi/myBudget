@@ -25,6 +25,7 @@ export function InlineNativeAd({
   const rafRef = useRef<number>(0);
   const [reservedHeight, setReservedHeight] = useState(0);
   const [debugLine, setDebugLine] = useState<string | null>(null);
+  const reservedHeightRef = useRef(0);
 
   const hideNativeAd = useCallback(
     async (reason: string) => {
@@ -69,7 +70,7 @@ export function InlineNativeAd({
       const adId = resolveInlineAdUnitId();
       const offsetX = Math.round(rect.left);
       const contentWidth = width;
-      const contentHeight = Math.max(reservedHeight || 0, minHeight);
+      const contentHeight = Math.max(reservedHeightRef.current || 0, minHeight);
 
       logAdMob("showBanner(native) 요청", {
         adId,
@@ -103,7 +104,7 @@ export function InlineNativeAd({
         );
       }
     }
-  }, [alwaysVisible, hideNativeAd, minHeight, reservedHeight]);
+  }, [alwaysVisible, hideNativeAd, minHeight]);
 
   const scheduleSync = useCallback(() => {
     if (!Capacitor.isNativePlatform()) {
@@ -173,10 +174,15 @@ export function InlineNativeAd({
           (info: { height: number }) => {
             if (!cancelled) {
               if (info.height > 0) {
-                setReservedHeight(Math.ceil(info.height));
+                const nextHeight = Math.ceil(info.height);
+                reservedHeightRef.current = nextHeight;
+                setReservedHeight(nextHeight);
                 logAdMob("SizeChanged", info);
+                scheduleSync();
               } else if (collapseWhenHidden) {
+                reservedHeightRef.current = 0;
                 setReservedHeight(0);
+                scheduleSync();
               }
             }
           },
@@ -222,7 +228,7 @@ export function InlineNativeAd({
         AdMob.removeBanner().catch(() => {}),
       );
     };
-  }, [collapseWhenHidden]);
+  }, [collapseWhenHidden, scheduleSync]);
 
   const nativeMinHeight = Capacitor.isNativePlatform()
     ? reservedHeight > 0

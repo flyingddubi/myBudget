@@ -12,7 +12,7 @@ import {
   onAuthStateChanged,
   signInWithEmailAndPassword,
   signInWithCredential,
-  signInWithRedirect,
+  signInWithPopup,
   signOut as firebaseSignOut,
   updateProfile,
   type User,
@@ -116,7 +116,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
           return;
         }
 
-        await signInWithRedirect(auth, googleProvider);
+        await signInWithPopup(auth, googleProvider);
       },
       signOut: async () => {
         await firebaseSignOut(auth);

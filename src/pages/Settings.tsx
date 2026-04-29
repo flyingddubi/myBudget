@@ -21,7 +21,7 @@ import { InlineNativeAd } from "../components/InlineNativeAd";
 import { PrivacyPolicyContent } from "../components/PrivacyPolicyContent";
 import { useAppContext, useLedgerId } from "../context/AppContext";
 import { useAuthContext } from "../context/AuthContext";
-import { useNoticeCenter } from "../hooks/useNoticeCenter";
+import type { NoticeCenterValue, NoticeItem } from "../hooks/useNoticeCenter";
 import { useI18n } from "../i18n";
 import { db } from "../firebase";
 import { formatCurrency } from "../utils/formatCurrency";
@@ -35,6 +35,7 @@ type SettingsProps = {
   menuOpen: boolean;
   onCloseMenu: () => void;
   onBackToMain: () => void;
+  noticeCenter: Pick<NoticeCenterValue, "notices" | "readNoticeIdSet" | "markNoticeAsRead">;
 };
 
 type MemberListItem = {
@@ -49,65 +50,16 @@ type SettingsDialogState =
   | { type: "delete-ledger" }
   | null;
 
-const privacyPolicySections = [
-  {
-    title: "1. 개인정보 수집",
-    body: [
-      "본 앱은 사용자의 개인정보를 직접 수집하거나 저장하지 않습니다.",
-      "앱에서 입력되는 가계부 데이터는 사용자의 기기 내부에만 저장되며, 외부 서버로 전송되지 않습니다.",
-    ],
-  },
-  {
-    title: "2. 제3자 서비스 사용",
-    body: [
-      "본 앱은 광고 제공을 위해 다음과 같은 제3자 서비스를 사용합니다.",
-      "Google의 Google AdMob",
-      "AdMob은 광고 제공 및 서비스 개선을 위해 다음과 같은 정보를 수집할 수 있습니다.",
-    ],
-    bullets: [
-      "광고 ID",
-      "기기 정보",
-      "IP 주소",
-      "앱 사용 정보",
-      "대략적인 위치 정보",
-    ],
-  },
-  {
-    title: "3. 데이터 보관",
-    body: [
-      "본 앱은 사용자의 개인정보를 별도로 수집하거나 서버에 저장하지 않습니다.",
-    ],
-  },
-  {
-    title: "4. 어린이 개인정보 보호",
-    body: [
-      "본 앱은 어린이를 포함한 모든 연령이 사용할 수 있으나, 13세 미만 어린이의 개인정보를 의도적으로 수집하지 않습니다.",
-      "또한, 본 앱에서 사용하는 광고 서비스(Google AdMob)는 관련 법규 및 정책에 따라 데이터를 처리할 수 있습니다.",
-    ],
-  },
-  {
-    title: "5. 개인정보처리방침 변경",
-    body: [
-      "본 개인정보처리방침은 필요에 따라 변경될 수 있으며, 변경 시 본 페이지를 통해 안내됩니다.",
-    ],
-  },
-];
-
 const guideImageModules = import.meta.glob("../assets/explain_*.png", {
-  eager: true,
   import: "default",
-}) as Record<string, string>;
+}) as Record<string, () => Promise<string>>;
 
-const guideImages = Object.entries(guideImageModules)
+const guideImageEntries = Object.entries(guideImageModules)
   .sort(([pathA], [pathB]) => {
     const a = Number(pathA.match(/explain_(\d+)\.png$/)?.[1] ?? 0);
     const b = Number(pathB.match(/explain_(\d+)\.png$/)?.[1] ?? 0);
     return a - b;
-  })
-  .map(([path, src]) => ({
-    src,
-    order: Number(path.match(/explain_(\d+)\.png$/)?.[1] ?? 0),
-  }));
+  });
 
 async function deleteCollectionDocuments(collectionPath: string[]) {
   const snapshot = await getDocs(collection(db, collectionPath.join("/")));
@@ -161,8 +113,28 @@ function PrivacyPolicyScreen({ onBack }: { onBack: () => void }) {
 function AppGuideScreen({ onBack }: { onBack: () => void }) {
   const { messages } = useI18n();
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [guideImages, setGuideImages] = useState<Array<{ src: string; order: number }>>([]);
   const touchStartXRef = useRef<number | null>(null);
   const lastIndex = guideImages.length - 1;
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void Promise.all(
+      guideImageEntries.map(async ([path, load]) => ({
+        src: await load(),
+        order: Number(path.match(/explain_(\d+)\.png$/)?.[1] ?? 0),
+      })),
+    ).then((items) => {
+      if (!cancelled) {
+        setGuideImages(items);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const goToPrev = () => {
     setCurrentIndex((prev) => Math.max(0, prev - 1));
@@ -215,11 +187,16 @@ function AppGuideScreen({ onBack }: { onBack: () => void }) {
             </p>
           </div>
           <span className="shrink-0 rounded-full bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-500">
-            {currentIndex + 1} / {guideImages.length}
+            {guideImages.length === 0 ? "0 / 0" : `${currentIndex + 1} / ${guideImages.length}`}
           </span>
         </div>
 
-        <div className="space-y-4">
+        {guideImages.length === 0 ? (
+          <div className="rounded-[24px] bg-slate-50 px-4 py-10 text-center text-sm text-slate-400">
+            {messages.loading.loading}
+          </div>
+        ) : (
+          <div className="space-y-4">
           <div
             className="relative overflow-hidden rounded-[24px] border border-slate-200 bg-slate-50"
             onTouchStart={handleTouchStart}
@@ -283,7 +260,8 @@ function AppGuideScreen({ onBack }: { onBack: () => void }) {
               );
             })}
           </div>
-        </div>
+          </div>
+        )}
       </section>
     </div>
   );
@@ -294,9 +272,10 @@ export function Settings({
   menuOpen,
   onCloseMenu,
   onBackToMain,
+  noticeCenter,
 }: SettingsProps) {
   const { messages } = useI18n();
-  const { user, signOut } = useAuthContext();
+  const { user } = useAuthContext();
   const ledgerId = useLedgerId();
   const {
     state: { budget, categories, transactions },
@@ -315,9 +294,8 @@ export function Settings({
   const [pendingInviteUserIds, setPendingInviteUserIds] = useState<string[]>([]);
   const [memberList, setMemberList] = useState<MemberListItem[]>([]);
   const [selectedNoticeId, setSelectedNoticeId] = useState<string | null>(null);
-  const [loggingOut, setLoggingOut] = useState(false);
 
-  const { notices, readNoticeIdSet, markNoticeAsRead } = useNoticeCenter();
+  const { notices, readNoticeIdSet, markNoticeAsRead } = noticeCenter;
   const isOwner = Boolean(user?.uid && ledgerOwnerId === user.uid);
 
   useEffect(() => {
@@ -399,7 +377,7 @@ export function Settings({
   }, [ledgerId]);
 
   useEffect(() => {
-    if (!isOwner || memberIds.length === 0) {
+    if (memberIds.length === 0) {
       setMemberList([]);
       return;
     }
@@ -439,7 +417,7 @@ export function Settings({
     return () => {
       cancelled = true;
     };
-  }, [isOwner, memberIds]);
+  }, [memberIds]);
 
   const usedCategories = useMemo(
     () => new Set(transactions.map((transaction) => transaction.category)),
@@ -689,7 +667,7 @@ export function Settings({
     });
   };
 
-  const handleOpenNotice = (notice: (typeof notices)[number]) => {
+  const handleOpenNotice = (notice: NoticeItem) => {
     setSelectedNoticeId(notice.id);
     void markNoticeAsRead(notice.id);
   };
@@ -731,17 +709,6 @@ export function Settings({
   const confirmButtonLabel = dialogBusy
     ? messages.settings.processing
     : messages.common.confirm;
-
-  const handleLogout = async () => {
-    setLoggingOut(true);
-    try {
-      await signOut();
-    } catch {
-      window.alert(messages.settings.logoutError);
-    } finally {
-      setLoggingOut(false);
-    }
-  };
 
   if (view === "privacy") {
     return <PrivacyPolicyScreen onBack={onBackToMain} />;
@@ -889,41 +856,6 @@ export function Settings({
       <div className="space-y-5">
         <section className="rounded-[28px] bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.08)]">
           <div>
-            <h3 className="text-base font-bold text-slate-900">{messages.settings.accountTitle}</h3>
-            <p className="mt-1 text-sm text-slate-400">{messages.settings.accountDesc}</p>
-          </div>
-
-          <div className="mt-4 space-y-3 rounded-[24px] bg-slate-50 p-4">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                {messages.settings.accountEmail}
-              </p>
-              <p className="mt-1 text-sm font-semibold text-slate-900">
-                {user?.email ?? "-"}
-              </p>
-            </div>
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">
-                {messages.settings.accountName}
-              </p>
-              <p className="mt-1 text-sm font-semibold text-slate-900">
-                {user?.displayName ?? "-"}
-              </p>
-            </div>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => void handleLogout()}
-            disabled={loggingOut}
-            className="mt-4 w-full rounded-[20px] border border-slate-200 bg-white px-4 py-4 text-sm font-bold text-slate-800 shadow-sm transition active:scale-[0.99] disabled:opacity-60"
-          >
-            {loggingOut ? messages.settings.loggingOut : messages.settings.logout}
-          </button>
-        </section>
-
-        <section className="rounded-[28px] bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.08)]">
-          <div>
             <div className="flex items-center justify-between gap-3">
               <h3 className="text-base font-bold text-slate-900">
                 {messages.settings.monthlyBudget}
@@ -1036,10 +968,10 @@ export function Settings({
         <section className="rounded-[28px] bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.08)]">
           <div>
             <h3 className="text-base font-bold text-slate-900">
-              {messages.settings.inviteTitle}
+              {messages.settings.inviteMemberTitle}
             </h3>
             <p className="mt-1 text-sm text-slate-400">
-              {messages.settings.inviteDesc}
+              {messages.settings.inviteMemberDesc}
             </p>
           </div>
           <div className="mt-4 flex gap-3">
@@ -1061,17 +993,22 @@ export function Settings({
                 : messages.settings.inviteButton}
             </button>
           </div>
-        </section>
 
-        {isOwner ? (
-          <section className="rounded-[28px] bg-white p-5 shadow-[0_10px_30px_rgba(15,23,42,0.08)]">
-            <div>
-              <h3 className="text-base font-bold text-slate-900">
-                {messages.settings.memberCheckTitle}
-              </h3>
-              <p className="mt-1 text-sm text-slate-400">
-                {messages.settings.memberCheckDesc}
-              </p>
+          <div className="mt-5 border-t border-slate-100 pt-5">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h4 className="text-sm font-bold text-slate-900">
+                  {messages.settings.memberCheckTitle}
+                </h4>
+                <p className="mt-1 text-xs text-slate-400">
+                  {isOwner
+                    ? messages.settings.memberCheckDesc
+                    : messages.settings.memberViewDesc}
+                </p>
+              </div>
+              <span className="shrink-0 rounded-full bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-500">
+                {memberList.length}
+              </span>
             </div>
 
             {memberList.length === 0 ? (
@@ -1088,20 +1025,22 @@ export function Settings({
                     <p className="min-w-0 flex-1 break-all text-sm font-semibold text-slate-800">
                       {member.email}
                     </p>
-                    <button
-                      type="button"
-                      onClick={() => handleOpenRemoveMemberDialog(member)}
-                      disabled={dialogBusy}
-                      className="shrink-0 rounded-[16px] bg-rose-500 px-4 py-3 text-sm font-bold text-white disabled:opacity-60"
-                    >
-                      {messages.settings.memberRemoveButton}
-                    </button>
+                    {isOwner ? (
+                      <button
+                        type="button"
+                        onClick={() => handleOpenRemoveMemberDialog(member)}
+                        disabled={dialogBusy}
+                        className="shrink-0 rounded-[16px] bg-rose-500 px-4 py-3 text-sm font-bold text-white disabled:opacity-60"
+                      >
+                        {messages.settings.memberRemoveButton}
+                      </button>
+                    ) : null}
                   </div>
                 ))}
               </div>
             )}
-          </section>
-        ) : null}
+          </div>
+        </section>
 
         <section className="rounded-[28px] border border-rose-100 bg-rose-50/60 p-5 shadow-[0_10px_30px_rgba(15,23,42,0.06)]">
           <div>

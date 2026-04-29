@@ -36,17 +36,41 @@ type AppProviderProps = PropsWithChildren<{
   ledgerId?: string;
 }>;
 
+function toMillis(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (value instanceof Date) {
+    return value.getTime();
+  }
+
+  if (typeof value === "object" && value !== null && "toDate" in value) {
+    const maybeTimestamp = value as { toDate?: () => Date };
+    if (typeof maybeTimestamp.toDate === "function") {
+      return maybeTimestamp.toDate().getTime();
+    }
+  }
+
+  return null;
+}
+
+function toFallbackDateMillis(date: string): number {
+  const parsed = Date.parse(`${date}T00:00:00`);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
 function sortTransactions(items: Transaction[]) {
-  return [...items].sort((a, b) => b.date.localeCompare(a.date));
+  return [...items].sort((a, b) => {
+    if (a.createdAtMs !== b.createdAtMs) {
+      return b.createdAtMs - a.createdAtMs;
+    }
+    return b.date.localeCompare(a.date);
+  });
 }
 
 function sortRecurringTemplates(items: RecurringTemplate[]) {
   return [...items].sort((a, b) => a.name.localeCompare(b.name, "ko"));
-}
-
-async function deleteAllDocuments(collectionPath: string[]) {
-  const snapshot = await getDocs(collection(db, collectionPath.join("/")));
-  await Promise.all(snapshot.docs.map((item) => deleteDoc(item.ref)));
 }
 
 export function AppProvider({ children, ledgerId }: AppProviderProps) {
@@ -97,6 +121,10 @@ export function AppProvider({ children, ledgerId }: AppProviderProps) {
               amount: Math.round(amount),
               category,
               date,
+              createdAtMs:
+                toMillis(data.createdAt) ??
+                toMillis(data.updatedAt) ??
+                toFallbackDateMillis(date),
             };
             if (typeof data.memo === "string") {
               nextTransaction.memo = data.memo;
@@ -279,80 +307,6 @@ export function AppProvider({ children, ledgerId }: AppProviderProps) {
         const categoriesRef = collection(db, "ledgers", ledgerId, "categories");
         const snapshot = await getDocs(query(categoriesRef, where("name", "==", category)));
         await Promise.all(snapshot.docs.map((item) => deleteDoc(item.ref)));
-      },
-      resetAllData: async () => {
-        if (!ledgerId) {
-          return;
-        }
-
-        await Promise.all([
-          deleteAllDocuments(["ledgers", ledgerId, "transactions"]),
-          deleteAllDocuments(["ledgers", ledgerId, "recurringTemplates"]),
-          deleteAllDocuments(["ledgers", ledgerId, MONTHLY_BUDGET_COLLECTION]),
-        ]);
-      },
-      importBackup: async (next) => {
-        if (!ledgerId) {
-          return;
-        }
-
-        await Promise.all([
-          deleteAllDocuments(["ledgers", ledgerId, "transactions"]),
-          deleteAllDocuments(["ledgers", ledgerId, "recurringTemplates"]),
-          deleteAllDocuments(["ledgers", ledgerId, MONTHLY_BUDGET_COLLECTION]),
-          deleteAllDocuments(["ledgers", ledgerId, "categories"]),
-        ]);
-
-        await Promise.all([
-          ...next.transactions.map((transaction) =>
-            setDoc(doc(db, "ledgers", ledgerId, "transactions", transaction.id), {
-              type: transaction.type,
-              amount: Math.round(transaction.amount),
-              category: transaction.category.trim(),
-              memo: transaction.memo?.trim() ?? "",
-              date: transaction.date,
-              updatedAt: serverTimestamp(),
-              createdAt: serverTimestamp(),
-            }),
-          ),
-          ...next.recurringTemplates.map((template) =>
-            setDoc(doc(db, "ledgers", ledgerId, "recurringTemplates", template.id), {
-              name: template.name.trim(),
-              type: template.type,
-              amount: Math.round(template.amount),
-              category: template.category.trim(),
-              memo: template.memo?.trim() ?? "",
-              updatedAt: serverTimestamp(),
-              createdAt: serverTimestamp(),
-            }),
-          ),
-          ...next.categories
-            .map((category) => category.trim())
-            .filter((category, index, items) => category && items.indexOf(category) === index)
-            .map((category) =>
-              addDoc(collection(db, "ledgers", ledgerId, "categories"), {
-                name: category,
-                createdAt: serverTimestamp(),
-              }),
-            ),
-        ]);
-
-        if (next.budget > 0) {
-          await setDoc(
-            doc(
-              db,
-              "ledgers",
-              ledgerId,
-              MONTHLY_BUDGET_COLLECTION,
-              formatBudgetMonthKey(new Date()),
-            ),
-            {
-              amount: Math.max(0, Math.round(next.budget)),
-              updatedAt: serverTimestamp(),
-            },
-            { merge: true },
-          );
-        }
       },
       addRecurringTemplate: async (template: RecurringTemplate) => {
         if (!ledgerId) {

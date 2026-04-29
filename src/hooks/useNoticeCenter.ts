@@ -12,6 +12,15 @@ export type NoticeItem = {
   showAsPopup: boolean;
 };
 
+export type NoticeCenterValue = {
+  notices: NoticeItem[];
+  readNoticeIdSet: Set<string>;
+  unreadCount: number;
+  popupNotice: NoticeItem | null;
+  markNoticeAsRead: (noticeId: string) => Promise<void>;
+  dismissPopupNotice: (noticeId: string) => void;
+};
+
 function toDateValue(value: unknown): Date | null {
   if (value instanceof Date) {
     return value;
@@ -41,7 +50,7 @@ function sortNotices(items: NoticeItem[]) {
   });
 }
 
-export function useNoticeCenter() {
+export function useNoticeCenter(): NoticeCenterValue {
   const { user } = useAuthContext();
   const [notices, setNotices] = useState<NoticeItem[]>([]);
   const [readNoticeIds, setReadNoticeIds] = useState<string[]>([]);

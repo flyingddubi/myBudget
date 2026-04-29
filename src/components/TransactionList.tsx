@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import type { Transaction } from "../types";
 import { useI18n } from "../i18n";
 import { TransactionItem } from "./TransactionItem";
@@ -21,6 +22,11 @@ export function TransactionList({
   onDelete,
 }: TransactionListProps) {
   const { localeTag, messages } = useI18n();
+  const groupedTransactions = useMemo(
+    () => groupTransactionsByDate(transactions),
+    [transactions],
+  );
+
   if (transactions.length === 0) {
     return (
       <div className="rounded-[28px] bg-white p-8 text-center shadow-[0_10px_30px_rgba(15,23,42,0.08)]">
@@ -33,10 +39,6 @@ export function TransactionList({
       </div>
     );
   }
-
-  const groupedTransactions = groupTransactionsByDate(
-    [...transactions].sort((a, b) => b.date.localeCompare(a.date)),
-  );
 
   return (
     <div className="space-y-5">

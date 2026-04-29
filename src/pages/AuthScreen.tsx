@@ -3,7 +3,7 @@ import type { FirebaseError } from "firebase/app";
 import { PrivacyPolicyContent } from "../components/PrivacyPolicyContent";
 import { useAuthContext } from "../context/AuthContext";
 import { useLocalStorage } from "../hooks/useLocalStorage";
-import { useI18n } from "../i18n";
+import { APP_LOCALE_OPTIONS, type AppLocale, useI18n } from "../i18n";
 
 type AuthMode = "login" | "signup";
 const LAST_EMAIL_STORAGE_KEY = "budget-auth-last-email";
@@ -136,40 +136,25 @@ export function AuthScreen() {
       <div className="mx-auto flex min-h-full w-full max-w-[420px] flex-col justify-start sm:justify-center">
         <div className="rounded-[32px] bg-white/95 p-6 shadow-[0_20px_60px_rgba(15,23,42,0.14)] ring-1 ring-slate-200/80">
           <div className="mb-6">
-            <div className="mb-4">
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
-                {messages.auth.languageLabel}
-              </p>
-              <div className="grid grid-cols-2 gap-2 rounded-[20px] bg-slate-50 p-2">
-                <button
-                  type="button"
-                  onClick={() => setLocale("ko")}
-                  className={`rounded-[16px] px-3 py-3 text-left transition ${
-                    locale === "ko"
-                      ? "bg-white shadow-sm ring-1 ring-slate-200"
-                      : "bg-transparent"
-                  }`}
+            <div className="mb-4 flex justify-end">
+              <label className="flex items-center gap-2 rounded-[18px] bg-slate-50 px-3 py-2.5 text-sm font-semibold text-slate-600">
+                <span className="text-base leading-none" aria-hidden="true">
+                  🌐
+                </span>
+                <span>Language</span>
+                <select
+                  value={locale}
+                  onChange={(event) => setLocale(event.target.value as AppLocale)}
+                  className="min-w-[132px] rounded-[14px] border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-900 outline-none transition focus:border-indigo-400"
+                  aria-label="Language"
                 >
-                  <p className="text-lg leading-none">🇰🇷</p>
-                  <p className="mt-1 text-xs font-semibold text-slate-700">
-                    {messages.auth.languageKo}
-                  </p>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setLocale("zh-TW")}
-                  className={`rounded-[16px] px-3 py-3 text-left transition ${
-                    locale === "zh-TW"
-                      ? "bg-white shadow-sm ring-1 ring-slate-200"
-                      : "bg-transparent"
-                  }`}
-                >
-                  <p className="text-lg leading-none">🇹🇼</p>
-                  <p className="mt-1 text-xs font-semibold text-slate-700">
-                    {messages.auth.languageZhTw}
-                  </p>
-                </button>
-              </div>
+                  {APP_LOCALE_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
             </div>
             <h1 className="mt-2 text-3xl font-bold tracking-tight text-slate-900">
               {activeTitle} <span className="text-sm font-semibold text-indigo-600"> - {messages.auth.brand}</span>

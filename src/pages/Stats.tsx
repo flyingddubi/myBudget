@@ -174,7 +174,12 @@ function CategoryExpenseDetailView({
           transaction.category === categoryName &&
           isYmdInMonth(transaction.date, viewMonth),
       )
-      .sort((a, b) => b.date.localeCompare(a.date));
+      .sort((a, b) => {
+        if (a.createdAtMs !== b.createdAtMs) {
+          return b.createdAtMs - a.createdAtMs;
+        }
+        return b.date.localeCompare(a.date);
+      });
   }, [transactions, categoryName, viewMonth]);
 
   const monthLabel = viewMonth.toLocaleDateString(localeTag, {
@@ -250,7 +255,7 @@ export function Stats() {
   const [statsView, setStatsView] = useState<"main" | "yearly">("main");
   const [detailCategory, setDetailCategory] = useState<string | null>(null);
   const [viewMonth, setViewMonth] = useState(() => startOfMonth(new Date()));
-  const [monthlyBudget, setMonthlyBudget] = useState(0);
+  const [historicalBudget, setHistoricalBudget] = useState(0);
   const categoryPieWrapRef = useRef<HTMLDivElement>(null);
 
   /** Recharts 파이 조각 포커스 시 스크롤 보정으로 하단 고정 탭이 튀는 현상 방지 */
@@ -274,13 +279,21 @@ export function Stats() {
   );
 
   const {
-    state: { transactions },
+    state: { transactions, budget },
   } = useAppContext();
   const ledgerId = useLedgerId();
 
+  const isViewingCurrentMonth = useMemo(() => {
+    const n = new Date();
+    return (
+      viewMonth.getFullYear() === n.getFullYear() &&
+      viewMonth.getMonth() === n.getMonth()
+    );
+  }, [viewMonth]);
+
   useEffect(() => {
-    if (!ledgerId) {
-      setMonthlyBudget(0);
+    if (!ledgerId || isViewingCurrentMonth) {
+      setHistoricalBudget(0);
       return;
     }
 
@@ -297,7 +310,7 @@ export function Stats() {
       (snapshot) => {
         const raw = snapshot.data()?.amount;
         const nextBudget = Number(raw ?? 0);
-        setMonthlyBudget(Number.isFinite(nextBudget) ? Math.max(0, Math.round(nextBudget)) : 0);
+        setHistoricalBudget(Number.isFinite(nextBudget) ? Math.max(0, Math.round(nextBudget)) : 0);
       },
       (error) => {
         console.warn("Failed to subscribe stats monthly budget", error);
@@ -305,15 +318,9 @@ export function Stats() {
     );
 
     return unsubscribe;
-  }, [ledgerId, viewMonth]);
+  }, [isViewingCurrentMonth, ledgerId, viewMonth]);
 
-  const isViewingCurrentMonth = useMemo(() => {
-    const n = new Date();
-    return (
-      viewMonth.getFullYear() === n.getFullYear() &&
-      viewMonth.getMonth() === n.getMonth()
-    );
-  }, [viewMonth]);
+  const monthlyBudget = isViewingCurrentMonth ? budget : historicalBudget;
 
   const {
     monthlyExpenseTotal,

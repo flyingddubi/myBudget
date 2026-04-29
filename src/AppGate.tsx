@@ -23,6 +23,7 @@ import { useI18n } from "./i18n";
 import { LoadingScreen } from "./pages/LoadingScreen";
 import { db } from "./firebase";
 import { LedgerSelectionScreen } from "./pages/LedgerSelectionScreen";
+import { MONTHLY_BUDGET_COLLECTION, formatBudgetMonthKey } from "./utils/monthlyBudget";
 
 type Phase = "loading" | "main";
 type BusyAction = "none" | "create" | "accept";
@@ -37,9 +38,30 @@ type InviteLedger = LedgerRef & {
 };
 
 const LOADING_MS = 2000;
+const DEFAULT_LEDGER_BUDGET = 1_000_000;
+const DEFAULT_LEDGER_CATEGORIES = ["식비", "의료", "생활", "문화", "저축", "월세"];
 
 function dedupeLedgers(items: LedgerRef[]) {
   return Array.from(new Map(items.map((item) => [item.id, item])).values());
+}
+
+async function initializeLedgerDefaults(ledgerId: string) {
+  await Promise.all([
+    setDoc(
+      doc(db, "ledgers", ledgerId, MONTHLY_BUDGET_COLLECTION, formatBudgetMonthKey(new Date())),
+      {
+        amount: DEFAULT_LEDGER_BUDGET,
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true },
+    ),
+    ...DEFAULT_LEDGER_CATEGORIES.map((name) =>
+      addDoc(collection(db, "ledgers", ledgerId, "categories"), {
+        name,
+        createdAt: serverTimestamp(),
+      }),
+    ),
+  ]);
 }
 
 function AppWithLedger({
@@ -135,6 +157,7 @@ export function AppGate() {
           })),
         ]);
 
+        const ownerCache = new Map<string, { name?: string; email?: string } | null>();
         const nextInvites = (
           await Promise.all(
             inviteSnapshot.docs.map(async (item) => {
@@ -158,8 +181,12 @@ export function AppGate() {
                 typeof pendingInviteData.invitedBy === "string"
                   ? pendingInviteData.invitedBy.trim()
                   : "";
-              const ownerSnapshot = ownerId ? await getDoc(doc(db, "users", ownerId)) : null;
-              const ownerData = ownerSnapshot?.data();
+              let ownerData = ownerCache.get(ownerId) ?? null;
+              if (ownerId && ownerData === null && !ownerCache.has(ownerId)) {
+                const ownerSnapshot = await getDoc(doc(db, "users", ownerId));
+                ownerData = ownerSnapshot.data() as { name?: string; email?: string } | null;
+                ownerCache.set(ownerId, ownerData);
+              }
               const ownerName =
                 invitedBy ||
                 (typeof ownerData?.name === "string" && ownerData.name.trim().length > 0
@@ -181,14 +208,6 @@ export function AppGate() {
 
         setAccessibleLedgers(nextAccessible);
         setInviteLedgers(nextInvites);
-
-        if (!selectedLedgerId && nextAccessible[0]?.id) {
-          void setDoc(
-            doc(db, "users", user.uid),
-            { selectedLedgerId: nextAccessible[0].id },
-            { merge: true },
-          );
-        }
       } catch (error) {
         console.warn("Failed to load ledgers", error);
         if (!cancelled) {
@@ -206,7 +225,19 @@ export function AppGate() {
     return () => {
       cancelled = true;
     };
-  }, [requestedBy, selectedLedgerId, user]);
+  }, [user]);
+
+  useEffect(() => {
+    if (!user || selectedLedgerId || !accessibleLedgers[0]?.id) {
+      return;
+    }
+
+    void setDoc(
+      doc(db, "users", user.uid),
+      { selectedLedgerId: accessibleLedgers[0].id },
+      { merge: true },
+    );
+  }, [accessibleLedgers, selectedLedgerId, user]);
 
   const activeLedgerId = useMemo(() => {
     if (!selectedLedgerId) {
@@ -230,6 +261,8 @@ export function AppGate() {
         pendingInviteUserIds: [],
         createdAt: serverTimestamp(),
       });
+
+      await initializeLedgerDefaults(created.id);
 
       setAccessibleLedgers((prev) =>
         dedupeLedgers([...prev, { id: created.id, ownerId: user.uid }]),

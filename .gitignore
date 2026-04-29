@@ -1,5 +1,15 @@
 # Dependency directories
 node_modules/
+dist/
 
 # Environment files
 .env
+.env.*
+
+# Android / Capacitor build outputs
+android/.gradle/
+android/app/build/
+android/build/
+
+# Logs
+*.log
