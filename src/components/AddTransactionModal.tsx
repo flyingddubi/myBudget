@@ -107,6 +107,7 @@ export function AddTransactionModal({
       category: form.category,
       memo: form.memo.trim(),
       date: form.date,
+      createdAtMs: initialTransaction?.createdAtMs ?? Date.now(),
     });
 
     onClose();

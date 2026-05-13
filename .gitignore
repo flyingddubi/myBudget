@@ -10,6 +10,9 @@ dist/
 android/.gradle/
 android/app/build/
 android/build/
+android/key.properties
+android/*.jks
+android/*.keystore
 
 # Logs
 *.log

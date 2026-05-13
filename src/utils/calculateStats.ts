@@ -1,11 +1,8 @@
 import type { CategoryStat, Transaction } from "../types";
 
-function isSameMonth(dateString: string, referenceDate: Date) {
-  const date = new Date(dateString);
-  return (
-    date.getFullYear() === referenceDate.getFullYear() &&
-    date.getMonth() === referenceDate.getMonth()
-  );
+function toMonthKey(referenceDate: Date) {
+  const month = String(referenceDate.getMonth() + 1).padStart(2, "0");
+  return `${referenceDate.getFullYear()}-${month}`;
 }
 
 export function calculateStats(
@@ -14,24 +11,27 @@ export function calculateStats(
   /** 집계 기준 월 (기본: 오늘 날짜가 속한 달) */
   referenceMonth: Date = new Date(),
 ) {
-  const currentMonthTransactions = transactions.filter((transaction) =>
-    isSameMonth(transaction.date, referenceMonth),
-  );
+  const monthKey = toMonthKey(referenceMonth);
+  const currentMonthTransactions: Transaction[] = [];
+  let monthlyIncomeTotal = 0;
+  let monthlyExpenseTotal = 0;
+  const categoryTotals: Record<string, number> = {};
 
-  const monthlyIncomeTotal = currentMonthTransactions
-    .filter((transaction) => transaction.type === "income")
-    .reduce((sum, transaction) => sum + transaction.amount, 0);
+  for (const transaction of transactions) {
+    if (!transaction.date.startsWith(monthKey)) {
+      continue;
+    }
 
-  const monthlyExpenseTotal = currentMonthTransactions
-    .filter((transaction) => transaction.type === "expense")
-    .reduce((sum, transaction) => sum + transaction.amount, 0);
+    currentMonthTransactions.push(transaction);
+    if (transaction.type === "income") {
+      monthlyIncomeTotal += transaction.amount;
+      continue;
+    }
 
-  const categoryTotals = currentMonthTransactions
-    .filter((transaction) => transaction.type === "expense")
-    .reduce<Record<string, number>>((acc, transaction) => {
-      acc[transaction.category] = (acc[transaction.category] ?? 0) + transaction.amount;
-      return acc;
-    }, {});
+    monthlyExpenseTotal += transaction.amount;
+    categoryTotals[transaction.category] =
+      (categoryTotals[transaction.category] ?? 0) + transaction.amount;
+  }
 
   const categoryBreakdown: CategoryStat[] = Object.entries(categoryTotals)
     .map(([name, value]) => ({

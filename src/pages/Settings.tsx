@@ -22,7 +22,7 @@ import { PrivacyPolicyContent } from "../components/PrivacyPolicyContent";
 import { useAppContext, useLedgerId } from "../context/AppContext";
 import { useAuthContext } from "../context/AuthContext";
 import type { NoticeCenterValue, NoticeItem } from "../hooks/useNoticeCenter";
-import { useI18n } from "../i18n";
+import { type AppLocale, useI18n } from "../i18n";
 import { db } from "../firebase";
 import { formatCurrency } from "../utils/formatCurrency";
 import { MONTHLY_BUDGET_COLLECTION } from "../utils/monthlyBudget";
@@ -50,16 +50,33 @@ type SettingsDialogState =
   | { type: "delete-ledger" }
   | null;
 
-const guideImageModules = import.meta.glob("../assets/explain_*.png", {
+const guideImageModules = import.meta.glob("../assets/explain_{kr,fr,vi}_*.png", {
   import: "default",
 }) as Record<string, () => Promise<string>>;
 
+type GuideAssetLocale = "kr" | "fr" | "vi";
+
+const GUIDE_LOCALE_FALLBACKS: Record<AppLocale, GuideAssetLocale[]> = {
+  ko: ["kr", "fr"],
+  "zh-TW": ["fr", "kr"],
+  "zh-CN": ["fr", "kr"],
+  "en-US": ["fr", "kr"],
+  vi: ["vi", "fr", "kr"],
+  "ja-JP": ["fr", "kr"],
+};
+
 const guideImageEntries = Object.entries(guideImageModules)
-  .sort(([pathA], [pathB]) => {
-    const a = Number(pathA.match(/explain_(\d+)\.png$/)?.[1] ?? 0);
-    const b = Number(pathB.match(/explain_(\d+)\.png$/)?.[1] ?? 0);
-    return a - b;
-  });
+  .map(([path, load]) => {
+    const [, locale = "", order = "0"] = path.match(/explain_(kr|fr|vi)_(\d+)\.png$/) ?? [];
+    return {
+      id: path,
+      load,
+      locale: locale as GuideAssetLocale,
+      order: Number(order),
+    };
+  })
+  .filter((entry) => entry.locale === "kr" || entry.locale === "fr" || entry.locale === "vi")
+  .sort((a, b) => a.order - b.order);
 
 async function deleteCollectionDocuments(collectionPath: string[]) {
   const snapshot = await getDocs(collection(db, collectionPath.join("/")));
@@ -111,19 +128,29 @@ function PrivacyPolicyScreen({ onBack }: { onBack: () => void }) {
 }
 
 function AppGuideScreen({ onBack }: { onBack: () => void }) {
-  const { messages } = useI18n();
+  const { locale, messages } = useI18n();
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [guideImages, setGuideImages] = useState<Array<{ src: string; order: number }>>([]);
+  const [guideImages, setGuideImages] = useState<Array<{ src: string; id: string }>>([]);
+  const [zoomedImageSrc, setZoomedImageSrc] = useState<string | null>(null);
   const touchStartXRef = useRef<number | null>(null);
   const lastIndex = guideImages.length - 1;
 
   useEffect(() => {
     let cancelled = false;
 
+    const fallbackLocales = GUIDE_LOCALE_FALLBACKS[locale];
+    const selectedLocale =
+      fallbackLocales.find((candidate) =>
+        guideImageEntries.some((entry) => entry.locale === candidate),
+      ) ?? "kr";
+    const selectedEntries = guideImageEntries.filter((entry) => entry.locale === selectedLocale);
+
+    setCurrentIndex(0);
+
     void Promise.all(
-      guideImageEntries.map(async ([path, load]) => ({
+      selectedEntries.map(async ({ id, load }) => ({
         src: await load(),
-        order: Number(path.match(/explain_(\d+)\.png$/)?.[1] ?? 0),
+        id,
       })),
     ).then((items) => {
       if (!cancelled) {
@@ -134,7 +161,7 @@ function AppGuideScreen({ onBack }: { onBack: () => void }) {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [locale]);
 
   const goToPrev = () => {
     setCurrentIndex((prev) => Math.max(0, prev - 1));
@@ -208,15 +235,16 @@ function AppGuideScreen({ onBack }: { onBack: () => void }) {
             >
               {guideImages.map((image) => (
                 <figure
-                  key={image.order}
+                  key={image.id}
                   className="w-full shrink-0"
-                  aria-hidden={image.order - 1 !== currentIndex}
+                  aria-hidden={guideImages[currentIndex]?.id !== image.id}
                 >
                   <img
                     src={image.src}
-                    alt={`App 설명서 ${image.order}`}
+                    alt={`${messages.settings.guideTitle} ${guideImages.findIndex((item) => item.id === image.id) + 1}`}
                     loading="lazy"
-                    className="h-[min(68vh,640px)] w-full bg-slate-50 object-contain"
+                    onClick={() => setZoomedImageSrc(image.src)}
+                    className="max-h-[68vh] w-full cursor-zoom-in bg-slate-50 object-contain"
                   />
                 </figure>
               ))}
@@ -249,13 +277,13 @@ function AppGuideScreen({ onBack }: { onBack: () => void }) {
               const active = index === currentIndex;
               return (
                 <button
-                  key={image.order}
+                  key={image.id}
                   type="button"
                   onClick={() => setCurrentIndex(index)}
                   className={`h-2.5 rounded-full transition ${
                     active ? "w-6 bg-indigo-500" : "w-2.5 bg-slate-300"
                   }`}
-                  aria-label={`${image.order}번 설명 이미지 보기`}
+                  aria-label={`${messages.settings.guideTitle} ${index + 1}`}
                 />
               );
             })}
@@ -263,6 +291,28 @@ function AppGuideScreen({ onBack }: { onBack: () => void }) {
           </div>
         )}
       </section>
+      {zoomedImageSrc ? (
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/90 px-4 py-6"
+          role="presentation"
+          onClick={() => setZoomedImageSrc(null)}
+        >
+          <button
+            type="button"
+            onClick={() => setZoomedImageSrc(null)}
+            className="absolute right-4 top-4 rounded-full bg-white/90 px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm"
+            aria-label={messages.common.close}
+          >
+            {messages.common.close}
+          </button>
+          <img
+            src={zoomedImageSrc}
+            alt={messages.settings.guideTitle}
+            className="max-h-[92vh] w-auto max-w-full object-contain"
+            onClick={(event) => event.stopPropagation()}
+          />
+        </div>
+      ) : null}
     </div>
   );
 }

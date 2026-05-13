@@ -1,12 +1,14 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
   type FocusEvent,
+  type ReactNode,
 } from "react";
-import { doc, onSnapshot } from "firebase/firestore";
+import { collection, doc, getDocs, onSnapshot, query } from "firebase/firestore";
 import {
   Bar,
   BarChart,
@@ -57,6 +59,38 @@ function formatYAxisTick(value: number) {
   return String(Math.round(value));
 }
 
+function ChartMountGuard({
+  className,
+  children,
+}: {
+  className: string;
+  children: () => ReactNode;
+}) {
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [ready, setReady] = useState(false);
+
+  useLayoutEffect(() => {
+    const element = containerRef.current;
+    if (!element) {
+      return;
+    }
+
+    const updateReady = () => {
+      const rect = element.getBoundingClientRect();
+      setReady(rect.width > 0 && rect.height > 0);
+    };
+
+    updateReady();
+    const observer = new ResizeObserver(() => {
+      updateReady();
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+
+  return <div ref={containerRef} className={className}>{ready ? children() : null}</div>;
+}
+
 function YearlyFlowView({
   transactions,
   onBack,
@@ -93,48 +127,50 @@ function YearlyFlowView({
             {messages.stats.yearlyFlowDesc}
           </p>
         </div>
-        <div className="h-[340px] w-full [&_.recharts-wrapper_*:focus]:outline-none [&_.recharts-surface]:outline-none [&_circle:focus]:outline-none [&_path:focus]:outline-none [&_rect:focus]:outline-none">
-          <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 8 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
-              <XAxis
-                dataKey="month"
-                tick={{ fontSize: 10, fill: "#64748b" }}
-                tickLine={false}
-                axisLine={false}
-                interval={0}
-                angle={-35}
-                textAnchor="end"
-                height={56}
-              />
-              <YAxis
-                tickFormatter={formatYAxisTick}
-                tick={{ fontSize: 10, fill: "#94a3b8" }}
-                tickLine={false}
-                axisLine={false}
-                width={44}
-              />
-              <Tooltip formatter={formatTooltipValue} />
-              <Bar
-                dataKey="expense"
-                name={messages.common.expense}
-                fill="#f43f5e"
-                radius={[6, 6, 0, 0]}
-                maxBarSize={28}
-                activeBar={false}
-              />
-              <Line
-                type="monotone"
-                dataKey="income"
-                name={messages.common.income}
-                stroke="#10b981"
-                strokeWidth={2.5}
-                dot={{ r: 3, fill: "#10b981", strokeWidth: 0 }}
-                activeDot={{ r: 5 }}
-              />
-            </ComposedChart>
-          </ResponsiveContainer>
-        </div>
+        <ChartMountGuard className="h-[340px] w-full [&_.recharts-wrapper_*:focus]:outline-none [&_.recharts-surface]:outline-none [&_circle:focus]:outline-none [&_path:focus]:outline-none [&_rect:focus]:outline-none">
+          {() => (
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={1}>
+              <ComposedChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 8 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+                <XAxis
+                  dataKey="month"
+                  tick={{ fontSize: 10, fill: "#64748b" }}
+                  tickLine={false}
+                  axisLine={false}
+                  interval={0}
+                  angle={-35}
+                  textAnchor="end"
+                  height={56}
+                />
+                <YAxis
+                  tickFormatter={formatYAxisTick}
+                  tick={{ fontSize: 10, fill: "#94a3b8" }}
+                  tickLine={false}
+                  axisLine={false}
+                  width={44}
+                />
+                <Tooltip formatter={formatTooltipValue} />
+                <Bar
+                  dataKey="expense"
+                  name={messages.common.expense}
+                  fill="#f43f5e"
+                  radius={[6, 6, 0, 0]}
+                  maxBarSize={28}
+                  activeBar={false}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="income"
+                  name={messages.common.income}
+                  stroke="#10b981"
+                  strokeWidth={2.5}
+                  dot={{ r: 3, fill: "#10b981", strokeWidth: 0 }}
+                  activeDot={{ r: 5 }}
+                />
+              </ComposedChart>
+            </ResponsiveContainer>
+          )}
+        </ChartMountGuard>
         <div className="mt-4 flex justify-center gap-6 text-xs text-slate-500">
           <span className="flex items-center gap-2">
             <span className="h-3 w-3 rounded-sm bg-[#f43f5e]" />
@@ -152,6 +188,65 @@ function YearlyFlowView({
 
 function startOfMonth(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), 1);
+}
+
+function formatMonthKey(date: Date) {
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  return `${date.getFullYear()}-${month}`;
+}
+
+function toMillis(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+  if (value instanceof Date) {
+    return value.getTime();
+  }
+  if (typeof value === "object" && value !== null && "toDate" in value) {
+    const maybeTimestamp = value as { toDate?: () => Date };
+    if (typeof maybeTimestamp.toDate === "function") {
+      return maybeTimestamp.toDate().getTime();
+    }
+  }
+  return null;
+}
+
+function toFallbackDateMillis(date: string): number {
+  const parsed = Date.parse(`${date}T00:00:00`);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function toTransactionsFromFirestoreDocs(
+  docs: Array<{ id: string; data: () => Record<string, unknown> }>,
+): Transaction[] {
+  return docs
+    .map((item) => {
+      const data = item.data();
+      const amount = Number(data.amount ?? 0);
+      const category = typeof data.category === "string" ? data.category.trim() : "";
+      const date = typeof data.date === "string" ? data.date : "";
+      const type = data.type === "income" || data.type === "expense" ? data.type : null;
+      if (!type || !category || !date || !Number.isFinite(amount)) {
+        return null;
+      }
+
+      const nextTransaction: Transaction = {
+        id: item.id,
+        type,
+        amount: Math.round(amount),
+        category,
+        date,
+        createdAtMs:
+          toMillis(data.createdAt) ??
+          toMillis(data.updatedAt) ??
+          toFallbackDateMillis(date),
+      };
+      if (typeof data.memo === "string") {
+        nextTransaction.memo = data.memo;
+      }
+      return nextTransaction;
+    })
+    .filter((item): item is Transaction => item !== null);
 }
 
 function CategoryExpenseDetailView({
@@ -256,6 +351,9 @@ export function Stats() {
   const [detailCategory, setDetailCategory] = useState<string | null>(null);
   const [viewMonth, setViewMonth] = useState(() => startOfMonth(new Date()));
   const [historicalBudget, setHistoricalBudget] = useState(0);
+  const [monthlyTransactions, setMonthlyTransactions] = useState<Transaction[]>([]);
+  const [yearlyTransactions, setYearlyTransactions] = useState<Transaction[]>([]);
+  const [loadingYearlyFlow, setLoadingYearlyFlow] = useState(false);
   const categoryPieWrapRef = useRef<HTMLDivElement>(null);
 
   /** Recharts 파이 조각 포커스 시 스크롤 보정으로 하단 고정 탭이 튀는 현상 방지 */
@@ -279,9 +377,45 @@ export function Stats() {
   );
 
   const {
-    state: { transactions, budget },
+    state: { budget },
   } = useAppContext();
   const ledgerId = useLedgerId();
+
+  useEffect(() => {
+    if (!ledgerId) {
+      setMonthlyTransactions([]);
+      return;
+    }
+
+    const monthKey = formatMonthKey(viewMonth);
+    const monthTransactionsRef = collection(
+      db,
+      "ledgers",
+      ledgerId,
+      "transactions",
+      monthKey,
+      "transactions",
+    );
+
+    const unsubscribe = onSnapshot(
+      query(monthTransactionsRef),
+      (snapshot) => {
+        setMonthlyTransactions(
+          toTransactionsFromFirestoreDocs(
+            snapshot.docs.map((item) => ({
+              id: item.id,
+              data: () => item.data() as Record<string, unknown>,
+            })),
+          ),
+        );
+      },
+      (error) => {
+        console.warn("Failed to subscribe stats monthly transactions", error);
+      },
+    );
+
+    return unsubscribe;
+  }, [ledgerId, viewMonth]);
 
   const isViewingCurrentMonth = useMemo(() => {
     const n = new Date();
@@ -329,8 +463,8 @@ export function Stats() {
     budgetProgress,
     budgetRemaining,
   } = useMemo(
-    () => calculateStats(transactions, monthlyBudget, viewMonth),
-    [monthlyBudget, transactions, viewMonth],
+    () => calculateStats(monthlyTransactions, monthlyBudget, viewMonth),
+    [monthlyBudget, monthlyTransactions, viewMonth],
   );
 
   const expenseHeading = isViewingCurrentMonth
@@ -361,12 +495,14 @@ export function Stats() {
   ];
 
   if (statsView === "yearly") {
-    return (
-      <YearlyFlowView
-        transactions={transactions}
-        onBack={() => setStatsView("main")}
-      />
-    );
+    if (loadingYearlyFlow) {
+      return (
+        <section className="rounded-[28px] bg-white px-5 py-12 text-center shadow-[0_10px_30px_rgba(15,23,42,0.08)]">
+          <p className="text-sm font-medium text-slate-400">{messages.loading.loading}</p>
+        </section>
+      );
+    }
+    return <YearlyFlowView transactions={yearlyTransactions} onBack={() => setStatsView("main")} />;
   }
 
   if (detailCategory !== null) {
@@ -374,7 +510,7 @@ export function Stats() {
       <CategoryExpenseDetailView
         categoryName={detailCategory}
         viewMonth={viewMonth}
-        transactions={transactions}
+        transactions={monthlyTransactions}
         onBack={() => setDetailCategory(null)}
       />
     );
@@ -479,37 +615,41 @@ export function Stats() {
           </p>
         ) : (
           <>
-            <div
-              ref={categoryPieWrapRef}
-              className="h-56 touch-manipulation select-none [-webkit-tap-highlight-color:transparent] [&_.recharts-wrapper_*:focus]:outline-none [&_.recharts-surface]:outline-none [&_path:focus]:outline-none [&_path]:outline-none [&_svg_*:focus]:outline-none"
-              style={{ WebkitTapHighlightColor: "transparent" }}
-              onFocusCapture={handleCategoryPieFocusCapture}
-            >
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart accessibilityLayer={false}>
-                  <Pie
-                    data={categoryBreakdown}
-                    dataKey="value"
-                    nameKey="name"
-                    innerRadius={56}
-                    outerRadius={84}
-                    paddingAngle={4}
-                    activeShape={false}
-                  >
-                    {categoryBreakdown.map((entry, index) => (
-                      <Cell
-                        key={entry.name}
-                        fill={CHART_COLORS[index % CHART_COLORS.length]}
+            <ChartMountGuard className="h-56 touch-manipulation select-none [-webkit-tap-highlight-color:transparent] [&_.recharts-wrapper_*:focus]:outline-none [&_.recharts-surface]:outline-none [&_path:focus]:outline-none [&_path]:outline-none [&_svg_*:focus]:outline-none">
+              {() => (
+                <div
+                  ref={categoryPieWrapRef}
+                  style={{ WebkitTapHighlightColor: "transparent" }}
+                  onFocusCapture={handleCategoryPieFocusCapture}
+                  className="h-full w-full"
+                >
+                  <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={1}>
+                    <PieChart accessibilityLayer={false}>
+                      <Pie
+                        data={categoryBreakdown}
+                        dataKey="value"
+                        nameKey="name"
+                        innerRadius={56}
+                        outerRadius={84}
+                        paddingAngle={4}
+                        activeShape={false}
+                      >
+                        {categoryBreakdown.map((entry, index) => (
+                          <Cell
+                            key={entry.name}
+                            fill={CHART_COLORS[index % CHART_COLORS.length]}
+                          />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        formatter={formatTooltipValue}
+                        cursor={{ fill: "transparent" }}
                       />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    formatter={formatTooltipValue}
-                    cursor={{ fill: "transparent" }}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+            </ChartMountGuard>
 
             <div className="mt-4 space-y-3">
               {categoryBreakdown.map((item, index) => (
@@ -553,28 +693,76 @@ export function Stats() {
             {messages.stats.incomeVsExpenseDesc}
           </p>
         </div>
-        <div
-          className="h-60 touch-manipulation select-none [-webkit-tap-highlight-color:transparent] [&_.recharts-wrapper_*:focus]:outline-none [&_.recharts-surface]:outline-none [&_path:focus]:outline-none [&_rect:focus]:outline-none [&_rect]:outline-none"
-          style={{ WebkitTapHighlightColor: "transparent" }}
-        >
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={compareData}>
-              <XAxis dataKey="name" tickLine={false} axisLine={false} />
-              <YAxis hide />
-              <Tooltip
-                formatter={formatTooltipValue}
-                cursor={{ fill: "transparent" }}
-              />
-              <Bar dataKey="amount" radius={[14, 14, 0, 0]} activeBar={false}>
-                <Cell fill="#10b981" />
-                <Cell fill="#f43f5e" />
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
+        <ChartMountGuard className="h-60 touch-manipulation select-none [-webkit-tap-highlight-color:transparent] [&_.recharts-wrapper_*:focus]:outline-none [&_.recharts-surface]:outline-none [&_path:focus]:outline-none [&_rect:focus]:outline-none [&_rect]:outline-none">
+          {() => (
+            <div className="h-full w-full" style={{ WebkitTapHighlightColor: "transparent" }}>
+              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={1}>
+                <BarChart data={compareData}>
+                  <XAxis dataKey="name" tickLine={false} axisLine={false} />
+                  <YAxis hide />
+                  <Tooltip
+                    formatter={formatTooltipValue}
+                    cursor={{ fill: "transparent" }}
+                  />
+                  <Bar dataKey="amount" radius={[14, 14, 0, 0]} activeBar={false}>
+                    <Cell fill="#10b981" />
+                    <Cell fill="#f43f5e" />
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
+        </ChartMountGuard>
         <button
           type="button"
-          onClick={() => setStatsView("yearly")}
+          onClick={() => {
+            if (!ledgerId) {
+              setYearlyTransactions([]);
+              setStatsView("yearly");
+              return;
+            }
+
+            setLoadingYearlyFlow(true);
+            const monthStarts = Array.from({ length: 12 }, (_, index) => {
+              const d = new Date();
+              d.setDate(1);
+              d.setMonth(d.getMonth() - index);
+              return new Date(d.getFullYear(), d.getMonth(), 1);
+            });
+
+            void Promise.all(
+              monthStarts.map(async (monthStart) => {
+                const monthKey = formatMonthKey(monthStart);
+                const monthRef = collection(
+                  db,
+                  "ledgers",
+                  ledgerId,
+                  "transactions",
+                  monthKey,
+                  "transactions",
+                );
+                const snapshot = await getDocs(query(monthRef));
+                return toTransactionsFromFirestoreDocs(
+                  snapshot.docs.map((item) => ({
+                    id: item.id,
+                    data: () => item.data() as Record<string, unknown>,
+                  })),
+                );
+              }),
+            )
+              .then((rows) => {
+                setYearlyTransactions(rows.flat());
+                setStatsView("yearly");
+              })
+              .catch((error) => {
+                console.warn("Failed to load yearly flow transactions", error);
+                setYearlyTransactions([]);
+                setStatsView("yearly");
+              })
+              .finally(() => {
+                setLoadingYearlyFlow(false);
+              });
+          }}
           className="mt-4 w-full rounded-2xl py-3 text-center text-sm font-semibold text-indigo-600 transition hover:bg-indigo-50 active:scale-[0.99]"
         >
           {messages.stats.viewYearlyFlow}

@@ -1,4 +1,4 @@
-type FormattingLocale = "ko" | "zh-TW" | "zh-CN" | "en-US" | "ja-JP";
+type FormattingLocale = "ko" | "zh-TW" | "zh-CN" | "en-US" | "vi" | "ja-JP";
 
 let currentFormattingLocale: FormattingLocale = "ko";
 
@@ -16,6 +16,8 @@ function getLocaleTag() {
       return "zh-CN";
     case "en-US":
       return "en-US";
+    case "vi":
+      return "vi-VN";
     case "ja-JP":
       return "ja-JP";
   }

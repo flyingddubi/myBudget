@@ -1,6 +1,7 @@
 import {
   addDoc,
   collection,
+  collectionGroup,
   deleteDoc,
   doc,
   getDocs,
@@ -9,12 +10,14 @@ import {
   serverTimestamp,
   setDoc,
   where,
+  writeBatch,
 } from "firebase/firestore";
 import {
   createContext,
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type PropsWithChildren,
 } from "react";
@@ -31,6 +34,8 @@ const DEFAULT_STATE: AppState = {
 
 const AppContext = createContext<AppContextValue | null>(null);
 const LedgerIdContext = createContext<string | undefined>(undefined);
+const LEGACY_TRANSACTIONS_COLLECTION = "transactions";
+const TRANSACTION_MONTH_TRANSACTIONS_COLLECTION = "transactions";
 
 type AppProviderProps = PropsWithChildren<{
   ledgerId?: string;
@@ -73,6 +78,48 @@ function sortRecurringTemplates(items: RecurringTemplate[]) {
   return [...items].sort((a, b) => a.name.localeCompare(b.name, "ko"));
 }
 
+function toTransactionMonthKey(date: string) {
+  const matched = /^(\d{4}-\d{2})/.exec(date);
+  if (matched?.[1]) {
+    return matched[1];
+  }
+  return formatBudgetMonthKey(new Date());
+}
+
+function toTransactionsFromSnapshotDocs(
+  docs: Array<{ id: string; data: () => Record<string, unknown> }>,
+) {
+  return docs
+    .map((item) => {
+      const data = item.data();
+      const amount = Number(data.amount ?? 0);
+      const category = typeof data.category === "string" ? data.category.trim() : "";
+      const date = typeof data.date === "string" ? data.date : "";
+      const type = data.type === "income" || data.type === "expense" ? data.type : null;
+      if (!type || !category || !date || !Number.isFinite(amount)) {
+        return null;
+      }
+
+      const nextTransaction: Transaction = {
+        id: item.id,
+        type,
+        amount: Math.round(amount),
+        category,
+        date,
+        createdAtMs:
+          toMillis(data.createdAt) ??
+          toMillis(data.updatedAt) ??
+          toFallbackDateMillis(date),
+      };
+      if (typeof data.memo === "string") {
+        nextTransaction.memo = data.memo;
+      }
+
+      return nextTransaction;
+    })
+    .filter((item): item is Transaction => item !== null);
+}
+
 export function AppProvider({ children, ledgerId }: AppProviderProps) {
   const [transactions, setTransactions] = useState<Transaction[]>(DEFAULT_STATE.transactions);
   const [categories, setCategories] = useState<string[]>(DEFAULT_STATE.categories);
@@ -80,6 +127,8 @@ export function AppProvider({ children, ledgerId }: AppProviderProps) {
   const [recurringTemplates, setRecurringTemplates] = useState<RecurringTemplate[]>(
     DEFAULT_STATE.recurringTemplates,
   );
+  const monthlyTransactionsRef = useRef<Transaction[]>([]);
+  const legacyTransactionsRef = useRef<Transaction[]>([]);
 
   useEffect(() => {
     if (!ledgerId) {
@@ -90,7 +139,16 @@ export function AppProvider({ children, ledgerId }: AppProviderProps) {
       return;
     }
 
-    const transactionsRef = collection(db, "ledgers", ledgerId, "transactions");
+    const legacyTransactionsRefCollection = collection(
+      db,
+      "ledgers",
+      ledgerId,
+      LEGACY_TRANSACTIONS_COLLECTION,
+    );
+    const monthlyTransactionsQuery = query(
+      collectionGroup(db, TRANSACTION_MONTH_TRANSACTIONS_COLLECTION),
+      where("ledgerId", "==", ledgerId),
+    );
     const recurringRef = collection(db, "ledgers", ledgerId, "recurringTemplates");
     const categoriesRef = collection(db, "ledgers", ledgerId, "categories");
     const currentBudgetRef = doc(
@@ -101,43 +159,48 @@ export function AppProvider({ children, ledgerId }: AppProviderProps) {
       formatBudgetMonthKey(new Date()),
     );
 
-    const unsubscribeTransactions = onSnapshot(
-      query(transactionsRef),
+    const syncTransactions = () => {
+      const merged = new Map<string, Transaction>();
+      monthlyTransactionsRef.current.forEach((transaction) => {
+        merged.set(transaction.id, transaction);
+      });
+      legacyTransactionsRef.current.forEach((transaction) => {
+        if (!merged.has(transaction.id)) {
+          merged.set(transaction.id, transaction);
+        }
+      });
+      setTransactions(sortTransactions(Array.from(merged.values())));
+    };
+
+    const unsubscribeMonthlyTransactions = onSnapshot(
+      monthlyTransactionsQuery,
       (snapshot) => {
-        const nextTransactions = snapshot.docs
-          .map((item) => {
-            const data = item.data();
-            const amount = Number(data.amount ?? 0);
-            const category = typeof data.category === "string" ? data.category.trim() : "";
-            const date = typeof data.date === "string" ? data.date : "";
-            const type = data.type === "income" || data.type === "expense" ? data.type : null;
-            if (!type || !category || !date || !Number.isFinite(amount)) {
-              return null;
-            }
-
-            const nextTransaction: Transaction = {
-              id: item.id,
-              type,
-              amount: Math.round(amount),
-              category,
-              date,
-              createdAtMs:
-                toMillis(data.createdAt) ??
-                toMillis(data.updatedAt) ??
-                toFallbackDateMillis(date),
-            };
-            if (typeof data.memo === "string") {
-              nextTransaction.memo = data.memo;
-            }
-
-            return nextTransaction;
-          })
-          .filter((item): item is Transaction => item !== null);
-
-        setTransactions(sortTransactions(nextTransactions));
+        monthlyTransactionsRef.current = toTransactionsFromSnapshotDocs(
+          snapshot.docs.map((item) => ({
+            id: item.id,
+            data: () => item.data() as Record<string, unknown>,
+          })),
+        );
+        syncTransactions();
       },
       (error) => {
-        console.warn("Failed to subscribe transactions", error);
+        console.warn("Failed to subscribe monthly transactions", error);
+      },
+    );
+
+    const unsubscribeLegacyTransactions = onSnapshot(
+      query(legacyTransactionsRefCollection),
+      (snapshot) => {
+        legacyTransactionsRef.current = toTransactionsFromSnapshotDocs(
+          snapshot.docs.map((item) => ({
+            id: item.id,
+            data: () => item.data() as Record<string, unknown>,
+          })),
+        );
+        syncTransactions();
+      },
+      (error) => {
+        console.warn("Failed to subscribe legacy transactions", error);
       },
     );
 
@@ -206,7 +269,8 @@ export function AppProvider({ children, ledgerId }: AppProviderProps) {
     );
 
     return () => {
-      unsubscribeTransactions();
+      unsubscribeMonthlyTransactions();
+      unsubscribeLegacyTransactions();
       unsubscribeCategories();
       unsubscribeRecurring();
       unsubscribeBudget();
@@ -231,40 +295,103 @@ export function AppProvider({ children, ledgerId }: AppProviderProps) {
           return;
         }
 
-        await setDoc(doc(db, "ledgers", ledgerId, "transactions", transaction.id), {
+        const monthKey = toTransactionMonthKey(transaction.date);
+        await setDoc(
+          doc(
+            db,
+            "ledgers",
+            ledgerId,
+            LEGACY_TRANSACTIONS_COLLECTION,
+            monthKey,
+            TRANSACTION_MONTH_TRANSACTIONS_COLLECTION,
+            transaction.id,
+          ),
+          {
           type: transaction.type,
           amount: Math.round(transaction.amount),
           category: transaction.category.trim(),
           memo: transaction.memo?.trim() ?? "",
           date: transaction.date,
+          monthKey,
+          ledgerId,
           updatedAt: serverTimestamp(),
           createdAt: serverTimestamp(),
-        });
+          },
+        );
       },
       updateTransaction: async (transaction) => {
         if (!ledgerId) {
           return;
         }
 
-        await setDoc(
-          doc(db, "ledgers", ledgerId, "transactions", transaction.id),
+        const prevTransaction = state.transactions.find((item) => item.id === transaction.id);
+        const nextMonthKey = toTransactionMonthKey(transaction.date);
+        const prevMonthKey = prevTransaction ? toTransactionMonthKey(prevTransaction.date) : nextMonthKey;
+
+        const batch = writeBatch(db);
+        const nextDocRef = doc(
+          db,
+          "ledgers",
+          ledgerId,
+          LEGACY_TRANSACTIONS_COLLECTION,
+          nextMonthKey,
+          TRANSACTION_MONTH_TRANSACTIONS_COLLECTION,
+          transaction.id,
+        );
+        batch.set(
+          nextDocRef,
           {
             type: transaction.type,
             amount: Math.round(transaction.amount),
             category: transaction.category.trim(),
             memo: transaction.memo?.trim() ?? "",
             date: transaction.date,
+            monthKey: nextMonthKey,
+            ledgerId,
             updatedAt: serverTimestamp(),
           },
           { merge: true },
         );
+
+        if (prevMonthKey !== nextMonthKey) {
+          batch.delete(
+            doc(
+              db,
+              "ledgers",
+              ledgerId,
+              LEGACY_TRANSACTIONS_COLLECTION,
+              prevMonthKey,
+              TRANSACTION_MONTH_TRANSACTIONS_COLLECTION,
+              transaction.id,
+            ),
+          );
+        }
+
+        batch.delete(doc(db, "ledgers", ledgerId, LEGACY_TRANSACTIONS_COLLECTION, transaction.id));
+        await batch.commit();
       },
       deleteTransaction: async (transactionId) => {
         if (!ledgerId) {
           return;
         }
 
-        await deleteDoc(doc(db, "ledgers", ledgerId, "transactions", transactionId));
+        const target = state.transactions.find((item) => item.id === transactionId);
+        const monthKey = target ? toTransactionMonthKey(target.date) : formatBudgetMonthKey(new Date());
+
+        await Promise.all([
+          deleteDoc(
+            doc(
+              db,
+              "ledgers",
+              ledgerId,
+              LEGACY_TRANSACTIONS_COLLECTION,
+              monthKey,
+              TRANSACTION_MONTH_TRANSACTIONS_COLLECTION,
+              transactionId,
+            ),
+          ),
+          deleteDoc(doc(db, "ledgers", ledgerId, LEGACY_TRANSACTIONS_COLLECTION, transactionId)),
+        ]);
       },
       setBudget: async (nextBudget) => {
         if (!ledgerId) {

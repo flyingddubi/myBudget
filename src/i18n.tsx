@@ -8,7 +8,7 @@ import {
 import { useLocalStorage } from "./hooks/useLocalStorage";
 import { setFormattingLocale } from "./utils/formatCurrency";
 
-export type AppLocale = "ko" | "zh-TW" | "zh-CN" | "en-US" | "ja-JP";
+export type AppLocale = "ko" | "zh-TW" | "zh-CN" | "en-US" | "vi" | "ja-JP";
 
 const I18N_STORAGE_KEY = "budget-app-locale";
 
@@ -17,10 +17,11 @@ export const APP_LOCALE_OPTIONS: Array<{ value: AppLocale; label: string }> = [
   { value: "zh-TW", label: "🇹🇼 繁體中文" },
   { value: "zh-CN", label: "🇨🇳 简体中文" },
   { value: "en-US", label: "🇺🇸 English" },
+  { value: "vi", label: "🇻🇳 Tiếng Việt" },
   { value: "ja-JP", label: "🇯🇵 日本語" },
 ];
 
-export const MESSAGES = {
+const BASE_MESSAGES = {
   ko: {
     common: {
       home: "홈",
@@ -1810,7 +1811,12 @@ export const MESSAGES = {
   },
 } as const;
 
-type MessagesShape = typeof MESSAGES.ko;
+type MessagesShape = typeof BASE_MESSAGES.ko;
+
+export const MESSAGES = {
+  ...BASE_MESSAGES,
+  vi: BASE_MESSAGES["en-US"],
+};
 
 type I18nContextValue = {
   locale: AppLocale;
@@ -1835,6 +1841,8 @@ function toLocaleTag(locale: AppLocale) {
       return "zh-CN";
     case "en-US":
       return "en-US";
+    case "vi":
+      return "vi-VN";
     case "ja-JP":
       return "ja-JP";
   }
